@@ -1,0 +1,10 @@
+# 敏感資料
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 報告產出
+output/threads_reports/

@@ -1,0 +1,21 @@
+# Threads AI 趨勢日報 — {{ report_date }}
+
+> 自動產生於 {{ generated_at }} UTC | 關鍵字: {{ keywords | join(', ') }} | 共 {{ total_posts }} 篇
+
+---
+{% if posts_by_category %}
+{% for category, posts in posts_by_category.items() %}
+## {{ category }}
+
+| # | 分數 | 摘要 | 作者 | ❤️ | 連結 |
+|---|------|------|------|-----|------|
+{% for p in posts %}| {{ loop.index }} | {{ "⭐" * p.score }} | {{ p.summary }} | @{{ p.username }} | {{ p.like_count }} | [原文]({{ p.permalink }}) |
+{% endfor %}
+
+{% endfor %}
+{% else %}
+> 今日無相關內容。關鍵字可能需要調整，或是今天 AI 圈比較安靜。
+{% endif %}
+---
+
+*本報告由 Threads API + Claude {{ model }} 自動產生*

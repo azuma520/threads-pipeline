@@ -1,0 +1,20 @@
+threads:
+  access_token: "${THREADS_ACCESS_TOKEN}"
+  keywords:
+    - AI
+    - LLM
+    - Claude
+    - GPT
+    - Agent
+    - automation
+    - coding
+    - 科技趨勢
+  sort: "TOP"
+  max_posts_per_keyword: 25
+
+anthropic:
+  model: "claude-sonnet-4-6"
+  max_tokens: 2048
+
+output:
+  directory: "./output/threads_reports"
