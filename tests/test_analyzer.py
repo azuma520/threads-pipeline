@@ -113,17 +113,16 @@ class TestMergeAnalysis:
 
 
 class TestAnalyzePosts:
-    """analyze_posts 整合測試。"""
+    """analyze_posts 整合測試（claude -p subprocess）。"""
 
-    @patch("threads_pipeline.analyzer.anthropic.Anthropic")
-    def test_normal_analysis(self, mock_anthropic_cls, sample_posts, mock_claude_analysis_json):
+    @patch("threads_pipeline.analyzer.subprocess.run")
+    def test_normal_analysis(self, mock_run, sample_posts, mock_claude_analysis_json):
         """正常分析流程。"""
-        mock_client = MagicMock()
-        mock_anthropic_cls.return_value = mock_client
-
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=mock_claude_analysis_json)]
-        mock_client.messages.create.return_value = mock_response
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=mock_claude_analysis_json,
+            stderr="",
+        )
 
         config = {"anthropic": {"model": "claude-sonnet-4-6", "max_tokens": 2048}}
         result = analyze_posts(sample_posts, config)
@@ -132,10 +131,10 @@ class TestAnalyzePosts:
         assert all("category" in p for p in result)
         assert all("score" in p for p in result)
 
-    @patch("threads_pipeline.analyzer.anthropic.Anthropic")
-    def test_api_error_uses_fallback(self, mock_anthropic_cls, sample_posts):
-        """API 呼叫失敗時使用 fallback。"""
-        mock_anthropic_cls.side_effect = Exception("API key invalid")
+    @patch("threads_pipeline.analyzer.subprocess.run")
+    def test_subprocess_error_uses_fallback(self, mock_run, sample_posts):
+        """subprocess 失敗時使用 fallback。"""
+        mock_run.side_effect = Exception("claude not found")
 
         config = {"anthropic": {"model": "claude-sonnet-4-6", "max_tokens": 2048}}
         result = analyze_posts(sample_posts, config)
