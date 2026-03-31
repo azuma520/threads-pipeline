@@ -1,0 +1,39 @@
+# Threads 戰情日報 — {{ report_date }}
+
+> 自動產生於 {{ generated_at }} {{ timezone }} | 帳號: @{{ username }}
+
+---
+
+## 帳號總覽
+
+| 指標 | 數值 |
+|------|------|
+| 粉絲數 | {{ account.followers }}{% if trend %} ({{ trend.followers.delta | signdelta }}){% endif %} |
+| 昨日觀看 | {{ account.total_views }} |
+{% if trend %}| {{ trend.days }} 天粉絲變化 | {{ trend.followers.delta | signdelta }} ({{ trend.followers.pct }}%) |
+{% endif %}
+---
+{% if top_posts %}
+## Top {{ top_posts | length }} 貼文
+
+| # | 內容 | 觀看 | 互動率 | 發文時間 |
+|---|------|------|--------|---------|
+{% for p in top_posts %}| {{ loop.index }} | {{ p.text_preview }} | {{ p.views }} | {{ p.engagement_rate }}% | {{ p.posted_at_local }} |
+{% endfor %}
+{% endif %}
+---
+{% if trend_report %}
+## 趨勢日報摘要
+
+{{ trend_report }}
+{% else %}
+## 趨勢日報
+
+> 今日無趨勢收集結果。
+{% endif %}
+---
+{% if not trend %}
+> 首日執行，趨勢數據待累積。持續跑幾天後就能看到變化。
+{% endif %}
+
+*本報告由 Threads Pipeline V2 自動產生*

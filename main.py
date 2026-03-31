@@ -48,40 +48,78 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
 
 
 def main():
-    """Pipeline 主流程：收集 → 分析 → 報告。"""
+    """Pipeline 主流程：趨勢收集 + 成效追蹤，各自獨立不互相拖累。"""
     from threads_pipeline.threads_client import fetch_posts
     from threads_pipeline.analyzer import analyze_posts
-    from threads_pipeline.report import render_report, save_report
+    from threads_pipeline.report import render_report, render_dashboard, save_report
+    from threads_pipeline.insights_tracker import (
+        init_db, fetch_and_store_post_insights,
+        fetch_and_store_account_insights, get_trend, get_top_posts,
+    )
 
     _load_dotenv()
-    print("=== Threads AI 趨勢收集 Pipeline ===")
+    print("=== Threads 社群經營戰情室 V2 ===")
 
-    # 載入設定
     config = load_config()
     print(f"✓ 設定載入完成（{len(config['threads']['keywords'])} 個關鍵字）")
 
-    # 日期範圍：昨天 00:00 ~ 今天 00:00 UTC
     now = datetime.now(timezone.utc)
     report_date = now.strftime("%Y-%m-%d")
 
-    # Step 1: 收集貼文
-    print("\n--- Step 1: 資料收集 ---")
-    posts = fetch_posts(config)
-    print(f"✓ 共取得 {len(posts)} 篇貼文（去重後）")
+    # ── Job A: 趨勢收集（獨立 try/except）──
+    trend_report = ""
+    try:
+        print("\n--- Job A: 趨勢收集 ---")
+        posts = fetch_posts(config)
+        print(f"  取得 {len(posts)} 篇貼文（去重後）")
 
-    # Step 2: AI 分析
-    if posts:
-        print("\n--- Step 2: AI 分析 ---")
-        posts = analyze_posts(posts, config)
-        print(f"✓ 分析完成，共 {len(posts)} 篇")
+        if posts:
+            posts = analyze_posts(posts, config)
+            print(f"  AI 分析完成，共 {len(posts)} 篇")
+
+        trend_content = render_report(posts, report_date, config)
+        trend_path = save_report(trend_content, config, report_date, prefix="trend")
+        print(f"✓ 趨勢日報已存檔：{trend_path}")
+        trend_report = trend_content
+    except Exception as e:
+        print(f"✗ 趨勢收集失敗：{e}")
+
+    # ── Job B: 成效追蹤（獨立 try/except）──
+    account_data = {}
+    top_posts = []
+    trend_data = None
+    try:
+        print("\n--- Job B: 成效追蹤 ---")
+        conn = init_db(config)
+
+        post_count = fetch_and_store_post_insights(config, conn)
+        print(f"  {post_count} 篇貼文 insights 已存入 SQLite")
+
+        account_data = fetch_and_store_account_insights(config, conn)
+        print(f"  帳號 insights 已存入（粉絲: {account_data.get('followers', '?')}）")
+
+        trend_data = get_trend(conn)
+        top_posts = get_top_posts(conn)
+        conn.close()
+        print("✓ 成效追蹤完成")
+    except Exception as e:
+        print(f"✗ 成效追蹤失敗：{e}")
+
+    # ── 合併戰情日報 ──
+    print("\n--- 產出戰情日報 ---")
+    if account_data:
+        dashboard = render_dashboard(
+            account=account_data,
+            top_posts=top_posts,
+            trend=trend_data,
+            trend_report=trend_report,
+            report_date=report_date,
+            config=config,
+        )
+        dash_path = save_report(dashboard, config, report_date, prefix="dashboard")
+        print(f"✓ 戰情日報已存檔：{dash_path}")
     else:
-        print("\n--- Step 2: 跳過（無貼文）---")
-
-    # Step 3: 產出報告
-    print("\n--- Step 3: 產出報告 ---")
-    content = render_report(posts, report_date, config)
-    filepath = save_report(content, config, report_date)
-    print(f"✓ 報告已存檔：{filepath}")
+        print("⚠ 無帳號數據，跳過戰情日報")
 
     print("\n=== Pipeline 完成 ===")
 

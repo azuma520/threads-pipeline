@@ -16,5 +16,11 @@ anthropic:
   model: "claude-sonnet-4-6"
   max_tokens: 2048
 
+insights:
+  data_dir: "./data"
+  db_name: "threads.db"
+  backfill_days: 30
+  timezone: "Asia/Taipei"
+
 output:
   directory: "./output/threads_reports"
