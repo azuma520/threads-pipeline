@@ -5,7 +5,7 @@
 | Phase | 內容 | 狀態 |
 |-------|------|------|
 | V1 | 趨勢收集 | 已完成 |
-| V2 | 成效追蹤 | 程式碼完成，待驗證 |
+| V2 | 成效追蹤 | 已完成，已驗證 |
 | V2.5 | 共鳴度分析 | 構想 |
 | V3 | 議題分析 + 內容資產追蹤 + 分享靈感 | 構想 |
 | V4 | 差異化觀點 + 全自動循環 | 願景 |
@@ -24,7 +24,7 @@
 
 ---
 
-## V2：成效追蹤（程式碼完成，待驗證）
+## V2：成效追蹤（已完成，2026-04-01 驗證通過）
 
 **資料收集**：
 - 抓所有自己的貼文 + 每篇 insights 數據（views, likes, replies, reposts, quotes）→ SQLite
@@ -33,12 +33,12 @@
 **分析輸出**：
 - 7 天趨勢：粉絲成長、觀看變化
 - Top 5 貼文排行（按觀看數）
-- 合併趨勢日報 + 成效分析 → 戰情日報（dashboard）
+- 趨勢日報和戰情日報分開存放（trend/ 和 dashboard/）
 
-**待驗證項目**：
-- insights API 實際回傳格式
-- rate limit 限制
-- backfill 歷史資料的可行性
+**API 探索結果**（2026-04-01）：
+- 完整測試 35 項，詳見 [api-exploration-results.md](api-exploration-results.md)
+- 發現 Standard Access 限制：keyword_search 只能搜自己的貼文
+- 已提交 App Review 申請 Advanced Access，等待審核
 
 ---
 

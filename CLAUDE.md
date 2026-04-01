@@ -9,10 +9,11 @@ A daily pipeline that collects AI/tech trend posts from Meta Threads API, analyz
 ## Commands
 
 ```bash
-# Run the pipeline
-PYTHONUTF8=1 python -m threads_pipeline.main
+# Run the pipeline (from parent directory 桌面/)
+$env:PYTHONUTF8=1; python -m threads_pipeline.main   # PowerShell
+PYTHONUTF8=1 python -m threads_pipeline.main          # bash
 
-# Run all tests
+# Run all tests (from project root)
 python -m pytest
 
 # Run a single test file
@@ -20,6 +21,40 @@ python -m pytest tests/test_analyzer.py
 
 # Run a specific test class or method
 python -m pytest tests/test_analyzer.py::TestParseAnalysis::test_valid_json
+
+# Run API exploration tests
+python3 scripts/api_explorer.py
+```
+
+## Project Structure
+
+```
+threads_pipeline/
+├── .env                          # THREADS_ACCESS_TOKEN（gitignored）
+├── config.yaml                   # 設定檔（${ENV_VAR} 插值）
+├── main.py                       # Pipeline 入口
+├── threads_client.py             # Threads API 封裝（搜尋、Token 驗證/續期）
+├── analyzer.py                   # AI 分析（claude -p subprocess）
+├── insights_tracker.py           # SQLite insights 追蹤
+├── report.py                     # Jinja2 報告渲染 + 存檔
+├── templates/
+│   ├── daily_report.md.j2        # 趨勢日報模板
+│   └── dashboard_report.md.j2    # 戰情日報模板
+├── tests/
+│   ├── conftest.py
+│   ├── test_analyzer.py
+│   ├── test_threads_client.py
+│   └── test_report.py
+├── scripts/
+│   ├── api_explorer.py           # API 功能邊界探索腳本
+│   └── demo_publish_reply.py     # 發文/回覆 Demo（App Review 用）
+├── output/threads_reports/
+│   ├── trend/                    # 趨勢日報（trend_YYYY-MM-DD.md）
+│   └── dashboard/                # 戰情日報（dashboard_YYYY-MM-DD.md）
+├── docs/
+│   ├── dev/                      # 開發文檔（架構、資料模型、測試、路線圖、API 探索）
+│   └── legal/                    # 隱私政策、資料刪除說明（GitHub Pages）
+└── assets/                       # App 圖示
 ```
 
 ## Architecture
@@ -37,6 +72,16 @@ The pipeline runs two independent jobs in sequence, each wrapped in its own try/
 - **SQLite upsert pattern** — `insights_tracker` uses `INSERT ... ON CONFLICT DO UPDATE` with `(collected_date, post_id)` as composite PK for post insights and `collected_date` as PK for account insights.
 - **All HTTP requests** go through `threads_client._request_with_retry` with exponential backoff and 429 rate-limit handling.
 - The package is imported as `threads_pipeline.*` (e.g., `from threads_pipeline.analyzer import ...`).
+- **Must run from parent directory** — `python -m threads_pipeline.main` must be run from `桌面/`, not from inside `threads_pipeline/`.
+
+### API Limitations (Standard Access)
+
+Currently using Standard Access for `threads_keyword_search` — search results only contain the authenticated user's own posts. App Review submitted 2026-04-01 for Advanced Access. See `docs/dev/api-exploration-results.md` for full details.
+
+- `keyword_search` actual limit is 50 (not 100 as documented)
+- `like_count` not available in search results (use `{post_id}/insights` instead)
+- `author_username` parameter ignored under Standard Access
+- Chinese keyword search returns 0 results under Standard Access
 
 ## Dependencies
 

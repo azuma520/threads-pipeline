@@ -3,6 +3,16 @@
 *.db
 data/
 
+# App Review 申請文件（含個人證件、營登、錄影）
+app-review-docs/
+
+# Playwright
+.playwright-mcp/
+
+# Claude
+.claude/
+.claude_review_state.json
+
 # Python
 __pycache__/
 *.pyc
