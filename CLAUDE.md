@@ -83,6 +83,10 @@ Currently using Standard Access for `threads_keyword_search` — search results 
 - `author_username` parameter ignored under Standard Access
 - Chinese keyword search returns 0 results under Standard Access
 
+## Available Skills
+
+- **threads-algorithm-skill** (`/threads-algorithm-skill`) — Threads/Meta 社群經營顧問，基於 26 個 Meta 演算法專利機制，提供內容策略建議。來源：`azuma520/threads-algorithm-skill`
+
 ## Dependencies
 
 - Python 3.13+
