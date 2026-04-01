@@ -1,11 +1,14 @@
 """Threads AI 趨勢收集 Pipeline — 每日自動收集、分析、產出報告。"""
 
+import logging
 import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 # Windows 中文輸出
 os.environ.setdefault("PYTHONUTF8", "1")
@@ -47,9 +50,31 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
     return yaml.safe_load(resolved)
 
 
+def _update_env_token(new_token: str, path: Path = ENV_PATH) -> None:
+    """讀取 .env 檔案，將 THREADS_ACCESS_TOKEN 替換為新 token 後寫回。"""
+    if not path.exists():
+        logger.warning(".env 檔案不存在，無法更新 Token")
+        return
+
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+
+    # 替換 THREADS_ACCESS_TOKEN=... 那行（支援行尾有空白的情況）
+    updated = re.sub(
+        r"(?m)^(THREADS_ACCESS_TOKEN\s*=\s*).*$",
+        rf"\g<1>{new_token}",
+        content,
+    )
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(updated)
+
+    logger.info(".env 中的 THREADS_ACCESS_TOKEN 已更新")
+
+
 def main():
     """Pipeline 主流程：趨勢收集 + 成效追蹤，各自獨立不互相拖累。"""
-    from threads_pipeline.threads_client import fetch_posts
+    from threads_pipeline.threads_client import fetch_posts, validate_token, refresh_token
     from threads_pipeline.analyzer import analyze_posts
     from threads_pipeline.report import render_report, render_dashboard, save_report
     from threads_pipeline.insights_tracker import (
@@ -62,6 +87,24 @@ def main():
 
     config = load_config()
     print(f"✓ 設定載入完成（{len(config['threads']['keywords'])} 個關鍵字）")
+
+    # ── Token 檢查 ──
+    token = config["threads"]["access_token"]
+    try:
+        user_info = validate_token(token)
+        print(f"✓ Token 有效（用戶: {user_info.get('id', '?')}）")
+    except Exception as e:
+        print(f"✗ Token 驗證失敗：{e}")
+        print("  請到 Meta Developer Portal 重新取得 token 並更新 .env")
+        return
+
+    # 嘗試續期
+    new_token = refresh_token(token)
+    if new_token and new_token != token:
+        config["threads"]["access_token"] = new_token
+        # 更新 .env 檔案
+        _update_env_token(new_token)
+        print("✓ Token 已自動續期")
 
     now = datetime.now(timezone.utc)
     report_date = now.strftime("%Y-%m-%d")

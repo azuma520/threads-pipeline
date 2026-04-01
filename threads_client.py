@@ -1,4 +1,4 @@
-"""Threads API 封裝：關鍵字搜尋、去重、時間過濾。"""
+"""Threads API 封裝：關鍵字搜尋、去重、時間過濾、Token 管理。"""
 
 import logging
 import time
@@ -9,6 +9,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 THREADS_API_BASE = "https://graph.threads.net/v1.0"
+THREADS_API_ROOT = "https://graph.threads.net"
 
 
 def fetch_posts(config: dict) -> list[dict]:
@@ -113,3 +114,45 @@ def _request_with_retry(
             time.sleep(wait)
 
     return {"data": []}
+
+
+def validate_token(token: str) -> dict:
+    """驗證 Token 是否有效，成功回傳使用者資料 dict（含 id）。
+
+    失敗時 raise Exception，錯誤訊息說明原因。
+    """
+    url = f"{THREADS_API_BASE}/me"
+    params = {"access_token": token}
+    try:
+        data = _request_with_retry(url, params)
+    except requests.exceptions.HTTPError as e:
+        raise Exception("Token 無效或已過期，請重新取得") from e
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Token 驗證時發生網路錯誤：{e}") from e
+
+    if "id" not in data:
+        raise Exception("Token 驗證回應格式異常，缺少使用者 id")
+
+    return data
+
+
+def refresh_token(token: str) -> str | None:
+    """嘗試續期 Long-lived Token，成功回傳新 token 字串，失敗回傳 None。
+
+    注意：只有尚未過期的 long-lived token 才能續期。
+    """
+    url = f"{THREADS_API_ROOT}/refresh_access_token"
+    params = {
+        "grant_type": "th_refresh_token",
+        "access_token": token,
+    }
+    try:
+        data = _request_with_retry(url, params)
+        new_token = data.get("access_token")
+        if not new_token:
+            logger.warning("Token 續期回應中未找到 access_token 欄位")
+            return None
+        return new_token
+    except Exception as e:
+        logger.warning("Token 續期失敗（可能已完全過期）：%s", e)
+        return None

@@ -1,4 +1,4 @@
-"""threads_client 測試：搜尋、去重、時間過濾、錯誤重試。"""
+"""threads_client 測試：搜尋、去重、時間過濾、錯誤重試、Token 管理。"""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -10,6 +10,8 @@ from threads_pipeline.threads_client import (
     _request_with_retry,
     _search_keyword,
     fetch_posts,
+    validate_token,
+    refresh_token,
 )
 
 
@@ -151,3 +153,71 @@ class TestRequestWithRetry:
 
         with pytest.raises(requests.exceptions.HTTPError):
             _request_with_retry("http://test.com", {}, max_retries=3)
+
+
+class TestValidateToken:
+    """validate_token 測試。"""
+
+    @patch("threads_pipeline.threads_client._request_with_retry")
+    def test_validate_token_success(self, mock_request):
+        """Token 有效時，回傳含 id 的使用者資料 dict。"""
+        mock_request.return_value = {"id": "12345", "username": "test_user"}
+
+        result = validate_token("valid_token_abc")
+
+        assert result["id"] == "12345"
+        assert result["username"] == "test_user"
+        # 確認呼叫了正確的 API endpoint
+        call_args = mock_request.call_args
+        assert "/me" in call_args[0][0]
+        assert call_args[0][1]["access_token"] == "valid_token_abc"
+
+    @patch("threads_pipeline.threads_client._request_with_retry")
+    def test_validate_token_invalid(self, mock_request):
+        """Token 無效（API 回傳 400/401）時，raise Exception 且訊息有意義。"""
+        mock_request.side_effect = requests.exceptions.HTTPError("400 Bad Request")
+
+        with pytest.raises(Exception) as exc_info:
+            validate_token("expired_or_invalid_token")
+
+        assert "Token 無效或已過期" in str(exc_info.value)
+
+    @patch("threads_pipeline.threads_client._request_with_retry")
+    def test_validate_token_missing_id(self, mock_request):
+        """回應格式異常（缺少 id）時，raise Exception。"""
+        mock_request.return_value = {"error": "unexpected format"}
+
+        with pytest.raises(Exception) as exc_info:
+            validate_token("some_token")
+
+        assert "id" in str(exc_info.value)
+
+
+class TestRefreshToken:
+    """refresh_token 測試。"""
+
+    @patch("threads_pipeline.threads_client._request_with_retry")
+    def test_refresh_token_success(self, mock_request):
+        """Token 成功續期時，回傳新的 token 字串。"""
+        mock_request.return_value = {
+            "access_token": "new_token_xyz",
+            "token_type": "bearer",
+        }
+
+        result = refresh_token("old_valid_token")
+
+        assert result == "new_token_xyz"
+        # 確認呼叫了正確的 API endpoint（不是 v1.0 底下）
+        call_args = mock_request.call_args
+        assert "refresh_access_token" in call_args[0][0]
+        assert "v1.0" not in call_args[0][0]
+        assert call_args[0][1]["grant_type"] == "th_refresh_token"
+
+    @patch("threads_pipeline.threads_client._request_with_retry")
+    def test_refresh_token_expired(self, mock_request):
+        """Token 已完全過期（API 回傳 400）時，回傳 None 而非拋出例外。"""
+        mock_request.side_effect = requests.exceptions.HTTPError("400 Bad Request")
+
+        result = refresh_token("fully_expired_token")
+
+        assert result is None
