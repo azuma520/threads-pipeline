@@ -1,6 +1,5 @@
 """報告產出模組：Jinja2 渲染 Markdown + 存檔。"""
 
-import re
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -61,7 +60,7 @@ def render_dashboard(
     account: dict,
     top_posts: list[dict],
     trend: dict | None,
-    trend_report: str,
+    trend_post_count: int,
     report_date: str,
     config: dict,
 ) -> str:
@@ -97,12 +96,6 @@ def render_dashboard(
         else:
             p["posted_at_local"] = "—"
 
-    # 嵌入前去掉趨勢日報的 footer，避免戰情日報結尾重複
-    if trend_report:
-        trend_report = re.sub(
-            r"\n*\*本報告由.*自動產生\*\s*$", "", trend_report
-        ).rstrip()
-
     return template.render(
         report_date=report_date,
         generated_at=generated_at,
@@ -111,16 +104,21 @@ def render_dashboard(
         account=account,
         top_posts=top_posts,
         trend=trend,
-        trend_report=trend_report,
+        trend_post_count=trend_post_count,
     )
 
 
-def save_report(content: str, config: dict, report_date: str, prefix: str = "threads_ai_trend") -> str:
+def save_report(
+    content: str, config: dict, report_date: str,
+    prefix: str = "threads_ai_trend", subdir: str = "",
+) -> str:
     """儲存報告至指定目錄，回傳檔案路徑。"""
     raw_dir = config["output"]["directory"]
     output_dir = Path(raw_dir)
     if not output_dir.is_absolute():
         output_dir = Path(__file__).parent / raw_dir
+    if subdir:
+        output_dir = output_dir / subdir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     filename = f"{prefix}_{report_date}.md"

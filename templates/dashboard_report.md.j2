@@ -22,14 +22,10 @@
 {% endfor %}
 {% endif %}
 ---
-{% if trend_report %}
-## 趨勢日報摘要
-
-{{ trend_report }}
-{% else %}
 ## 趨勢日報
 
-> 今日無趨勢收集結果。
+{% if trend_post_count is defined and trend_post_count > 0 %}> 今日收集 {{ trend_post_count }} 篇貼文，詳見 [趨勢日報](../trend/trend_{{ report_date }}.md)
+{% else %}> 今日無趨勢收集結果。
 {% endif %}
 ---
 {% if not trend %}

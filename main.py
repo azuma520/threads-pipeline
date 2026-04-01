@@ -110,7 +110,7 @@ def main():
     report_date = now.strftime("%Y-%m-%d")
 
     # ── Job A: 趨勢收集（獨立 try/except）──
-    trend_report = ""
+    trend_post_count = 0
     try:
         print("\n--- Job A: 趨勢收集 ---")
         posts = fetch_posts(config)
@@ -121,9 +121,9 @@ def main():
             print(f"  AI 分析完成，共 {len(posts)} 篇")
 
         trend_content = render_report(posts, report_date, config)
-        trend_path = save_report(trend_content, config, report_date, prefix="trend")
+        trend_path = save_report(trend_content, config, report_date, prefix="trend", subdir="trend")
         print(f"✓ 趨勢日報已存檔：{trend_path}")
-        trend_report = trend_content
+        trend_post_count = len(posts)
     except Exception as e:
         print(f"✗ 趨勢收集失敗：{e}")
 
@@ -155,11 +155,11 @@ def main():
             account=account_data,
             top_posts=top_posts,
             trend=trend_data,
-            trend_report=trend_report,
+            trend_post_count=trend_post_count,
             report_date=report_date,
             config=config,
         )
-        dash_path = save_report(dashboard, config, report_date, prefix="dashboard")
+        dash_path = save_report(dashboard, config, report_date, prefix="dashboard", subdir="dashboard")
         print(f"✓ 戰情日報已存檔：{dash_path}")
     else:
         print("⚠ 無帳號數據，跳過戰情日報")
