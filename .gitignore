@@ -1,5 +1,7 @@
 # 敏感資料
 .env
+*.db
+data/
 
 # Python
 __pycache__/
