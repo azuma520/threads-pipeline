@@ -4,6 +4,7 @@ import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from threads_pipeline.threads_client import _request_with_retry
 
@@ -29,16 +30,19 @@ THREADS_API_BASE = "https://graph.threads.net/v1.0"
 
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS post_insights (
-    collected_date TEXT NOT NULL,
-    post_id        TEXT NOT NULL,
-    text_preview   TEXT,
-    posted_at      TEXT,
-    username       TEXT,
-    views          INTEGER DEFAULT 0,
-    likes          INTEGER DEFAULT 0,
-    replies        INTEGER DEFAULT 0,
-    reposts        INTEGER DEFAULT 0,
-    quotes         INTEGER DEFAULT 0,
+    collected_date      TEXT NOT NULL,
+    post_id             TEXT NOT NULL,
+    text_preview        TEXT,
+    full_text           TEXT,
+    posted_at           TEXT,
+    post_hour_local     INTEGER,
+    username            TEXT,
+    views               INTEGER DEFAULT 0,
+    likes               INTEGER DEFAULT 0,
+    replies             INTEGER DEFAULT 0,
+    reposts             INTEGER DEFAULT 0,
+    quotes              INTEGER DEFAULT 0,
+    author_reply_count  INTEGER DEFAULT 0,
     PRIMARY KEY (collected_date, post_id)
 );
 
@@ -53,11 +57,13 @@ CREATE TABLE IF NOT EXISTS account_insights (
 """
 
 UPSERT_POST_SQL = """
-INSERT INTO post_insights (collected_date, post_id, text_preview, posted_at, username, views, likes, replies, reposts, quotes)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO post_insights (collected_date, post_id, text_preview, full_text, posted_at, post_hour_local, username, views, likes, replies, reposts, quotes, author_reply_count)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(collected_date, post_id) DO UPDATE SET
+    full_text=excluded.full_text, post_hour_local=excluded.post_hour_local,
     views=excluded.views, likes=excluded.likes, replies=excluded.replies,
-    reposts=excluded.reposts, quotes=excluded.quotes;
+    reposts=excluded.reposts, quotes=excluded.quotes,
+    author_reply_count=excluded.author_reply_count;
 """
 
 UPSERT_ACCOUNT_SQL = """
@@ -79,13 +85,31 @@ def init_db(config: dict) -> sqlite3.Connection:
 
     conn = sqlite3.connect(str(db_path))
     conn.executescript(CREATE_TABLES_SQL)
+    _migrate_schema(conn)
     return conn
+
+
+def _migrate_schema(conn: sqlite3.Connection):
+    """為已存在的 DB 新增缺少的欄位（向後相容）。"""
+    cursor = conn.execute("PRAGMA table_info(post_insights)")
+    existing_cols = {row[1] for row in cursor.fetchall()}
+    migrations = [
+        ("full_text", "TEXT"),
+        ("post_hour_local", "INTEGER"),
+        ("author_reply_count", "INTEGER DEFAULT 0"),
+    ]
+    for col_name, col_type in migrations:
+        if col_name not in existing_cols:
+            conn.execute(f"ALTER TABLE post_insights ADD COLUMN {col_name} {col_type}")
+            logger.info("已新增欄位: %s", col_name)
+    conn.commit()
 
 
 def fetch_and_store_post_insights(config: dict, conn: sqlite3.Connection) -> int:
     """抓取所有貼文的 insights 並存入 SQLite。回傳抓取的貼文數。"""
     token = config["threads"]["access_token"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    tz_name = config.get("insights", {}).get("timezone", "Asia/Taipei")
 
     # Step 1: 列出所有貼文
     posts = _fetch_all_posts(token)
@@ -95,22 +119,33 @@ def fetch_and_store_post_insights(config: dict, conn: sqlite3.Connection) -> int
 
     print(f"  取得 {len(posts)} 篇貼文，正在抓取 insights...")
 
+    # 取得自己的 username
+    username = posts[0].get("username", "") if posts else ""
+
     count = 0
     for p in posts:
         post_id = p["id"]
         try:
             insights = _fetch_single_post_insights(post_id, token)
+            full_text = p.get("text", "")
+            posted_at = p.get("timestamp", "")
+            post_hour = _calc_post_hour_local(posted_at, tz_name)
+            reply_count = _fetch_author_reply_count(post_id, username, token)
+
             conn.execute(UPSERT_POST_SQL, (
                 today,
                 post_id,
-                (p.get("text") or "")[:50].replace("\n", " "),
-                p.get("timestamp", ""),
+                full_text[:50].replace("\n", " "),
+                full_text,
+                posted_at,
+                post_hour,
                 p.get("username", ""),
                 insights.get("views", 0),
                 insights.get("likes", 0),
                 insights.get("replies", 0),
                 insights.get("reposts", 0),
                 insights.get("quotes", 0),
+                reply_count,
             ))
             count += 1
         except Exception as e:
@@ -179,6 +214,36 @@ def get_top_posts(conn: sqlite3.Connection, limit: int = 5) -> list[dict]:
 
     cols = ["post_id", "text_preview", "posted_at", "username", "views", "likes", "replies", "reposts", "quotes"]
     return [dict(zip(cols, row)) for row in rows]
+
+
+# ── Helper functions ───────────────────────────────────
+
+def _calc_post_hour_local(posted_at: str, tz_name: str = "Asia/Taipei") -> int | None:
+    """將 posted_at 轉換為本地時區的小時數（0-23）。"""
+    if not posted_at:
+        return None
+    try:
+        dt = datetime.fromisoformat(posted_at.replace("+0000", "+00:00"))
+        tz = ZoneInfo(tz_name)
+        return dt.astimezone(tz).hour
+    except (ValueError, TypeError):
+        return None
+
+
+def _fetch_author_reply_count(post_id: str, username: str, token: str) -> int:
+    """計算作者在該貼文下回覆了幾則。"""
+    url = f"{THREADS_API_BASE}/{post_id}/replies"
+    params = {
+        "fields": "id,username",
+        "access_token": token,
+    }
+    try:
+        data = _request_with_retry(url, params)
+        replies = data.get("data", [])
+        return sum(1 for r in replies if r.get("username") == username)
+    except Exception as e:
+        logger.warning("取得貼文 %s 回覆數失敗: %s", post_id, e)
+        return 0
 
 
 # ── Private API helpers ─────────────────────────────────
