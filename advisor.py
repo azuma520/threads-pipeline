@@ -231,13 +231,18 @@ def review_draft(
         plan_content=plan_content,
     )
 
+    import platform
+    use_shell = platform.system() == "Windows"
+
     try:
         result = subprocess.run(
-            ["codex", "exec", "-s", "read-only", prompt],
+            ["codex", "exec", "-s", "read-only", "-"],
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=timeout,
             encoding="utf-8",
+            shell=use_shell,
         )
 
         if result.returncode != 0:
