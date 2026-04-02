@@ -2,6 +2,7 @@
 
 import json
 import logging
+import subprocess
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -158,3 +159,95 @@ def generate_analysis_json(conn) -> dict:
         "freshness": "expired" if days_since > 3 else "cooling" if days_since > 1 else "active",
         "post_count": stats.get("post_count", 0),
     }
+
+
+REVIEW_PROMPT_TEMPLATE = """你是一位 Threads 社群經營顧問，負責審查以下草稿。
+
+## 審查標準（6 個維度）
+
+1. 鉤子 — 前兩行能不能讓人停下來（前 3 秒抓住眼球）
+2. 聚焦度 — 一篇一個切入點、一種人、一個問題
+3. Takeaway — 讀完能帶走什麼，會不會想回覆
+4. 定位一致性 — 跟歷史高表現內容方向是否一致
+5. 受眾匹配 — 有沒有打中目標受眾的痛點{audience_note}
+6. 結構完整性 — 是否符合文案結構要素，結尾是否有力{structure_note}
+
+## 帳號數據摘要
+{analysis_summary}
+
+{plan_section}
+
+## 待審查草稿
+---
+{draft}
+---
+
+請輸出：
+1. 整體評分（1-5 星）
+2. 每個維度用 ✅ / ⚠️ / ❌ 標記，加一句說明
+3. 3-5 個具體的「建議行動」
+
+用繁體中文回答。只輸出審查結果，不要重複草稿內容。"""
+
+
+def _build_review_prompt(
+    draft: str,
+    analysis_json: dict,
+    plan_content: str | None = None,
+) -> str:
+    """組合審查 prompt，控制在 8000 字以內。"""
+    analysis_summary = json.dumps(analysis_json, ensure_ascii=False, indent=2) if analysis_json else "（無數據）"
+
+    if plan_content:
+        plan_section = f"## 發文規劃\n{plan_content[:2000]}"
+        audience_note = "（參考發文規劃中的受眾設定）"
+        structure_note = "（參考發文規劃中的建議結構）"
+    else:
+        plan_section = ""
+        audience_note = "（無發文規劃，跳過此維度）"
+        structure_note = "（無發文規劃，僅檢查基本結構）"
+
+    prompt = REVIEW_PROMPT_TEMPLATE.format(
+        analysis_summary=analysis_summary[:2000],
+        plan_section=plan_section,
+        draft=draft[:3000],
+        audience_note=audience_note,
+        structure_note=structure_note,
+    )
+
+    return prompt
+
+
+def review_draft(
+    draft: str,
+    analysis_json: dict | None = None,
+    plan_content: str | None = None,
+    timeout: int = 60,
+) -> str:
+    """用 Codex CLI 審查草稿。回傳審查結果字串。"""
+    prompt = _build_review_prompt(
+        draft=draft,
+        analysis_json=analysis_json or {},
+        plan_content=plan_content,
+    )
+
+    try:
+        result = subprocess.run(
+            ["codex", "exec", "-s", "read-only", prompt],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            encoding="utf-8",
+        )
+
+        if result.returncode != 0:
+            logger.warning("Codex 審查失敗 (exit %d): %s", result.returncode, result.stderr)
+            return f"審查失敗（Codex exit code {result.returncode}）。請手動檢查草稿。\n\nstderr: {result.stderr[:500]}"
+
+        return result.stdout.strip()
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Codex 審查超時 (%ds)", timeout)
+        return f"審查失敗（超時 {timeout} 秒）。請手動檢查草稿。"
+    except FileNotFoundError:
+        return "審查失敗：找不到 codex CLI。請確認已安裝。"

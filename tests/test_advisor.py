@@ -84,3 +84,52 @@ class TestGenerateAnalysisJson:
         assert "followers" in result
         assert "avg_engagement_rate" in result
         assert "top_post_hours" in result
+
+
+from unittest.mock import patch, MagicMock
+from threads_pipeline.advisor import review_draft, _build_review_prompt
+
+
+class TestBuildReviewPrompt:
+    def test_includes_draft(self):
+        prompt = _build_review_prompt(
+            draft="這是我的草稿",
+            analysis_json={"followers": 206},
+            plan_content=None,
+        )
+        assert "這是我的草稿" in prompt
+        assert "206" in prompt
+
+    def test_includes_plan_when_provided(self):
+        prompt = _build_review_prompt(
+            draft="草稿",
+            analysis_json={},
+            plan_content="## 目標受眾\n- 誰：AI 初學者",
+        )
+        assert "AI 初學者" in prompt
+
+    def test_prompt_length_under_limit(self):
+        prompt = _build_review_prompt(
+            draft="短草稿",
+            analysis_json={"followers": 206},
+            plan_content="短 plan",
+        )
+        assert len(prompt) < 8000
+
+
+class TestReviewDraft:
+    @patch("threads_pipeline.advisor.subprocess.run")
+    def test_successful_review(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="整體評分：⭐⭐⭐⭐ (4/5)\n\n✅ 鉤子 — 好",
+        )
+        result = review_draft("這是草稿", analysis_json={"followers": 206})
+        assert "4/5" in result
+        assert mock_run.called
+
+    @patch("threads_pipeline.advisor.subprocess.run")
+    def test_failed_review(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stderr="error")
+        result = review_draft("草稿", analysis_json={})
+        assert "審查失敗" in result
