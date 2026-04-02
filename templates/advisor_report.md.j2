@@ -1,0 +1,73 @@
+# 發文策略分析報告 — {{ report_date }}
+
+> 產生於 {{ generated_at }} | 帳號: @{{ username }}
+
+---
+{% if mode == "no_data" %}
+> ⚠️ 尚無數據，請先執行 Pipeline 收集數據。
+{% elif mode == "degraded" %}
+> ⚠️ 數據累積中（不足 7 天），以下為初步快照。
+
+## 帳號現況
+
+| 指標 | 數值 |
+|------|------|
+| 粉絲數 | {{ account.followers }} |
+| 總觀看 | {{ account.total_views }} |
+
+{% if top_posts %}
+## 歷史表現 Top {{ top_posts | length }}
+
+| # | 內容摘要 | 觀看 | 互動率 | 作者回覆 | 時段 |
+|---|---------|------|--------|---------|------|
+{% for p in top_posts %}| {{ loop.index }} | {{ p.text_preview }} | {{ p.views }} | {{ p.engagement_rate }}% | {{ p.author_reply_count }} | {{ p.post_hour_local }}:00 |
+{% endfor %}{% endif %}
+{% else %}
+## 帳號現況
+
+| 指標 | 數值 |
+|------|------|
+| 粉絲數 | {{ account.followers }}{% if trend %} ({{ trend.followers.delta | signdelta }}){% endif %} |
+| 近 {{ trend.days }} 天觀看 | {{ account.total_views }} |
+{% if trend %}| 粉絲變化 | {{ trend.followers.delta | signdelta }} ({{ trend.followers.pct }}%) |{% endif %}
+
+## Creator Embedding 觀察
+
+### 高表現貼文特徵
+{% for p in top_posts[:3] %}
+- **{{ p.text_preview }}**（觀看 {{ p.views }}，互動率 {{ p.engagement_rate }}%，作者回覆 {{ p.author_reply_count }} 則）
+{% endfor %}
+
+### 低表現貼文特徵
+{% for p in bottom_posts[:3] %}
+- **{{ p.text_preview }}**（觀看 {{ p.views }}，互動率 {{ p.engagement_rate }}%，作者回覆 {{ p.author_reply_count }} 則）
+{% endfor %}
+
+## Distribution Lifecycle 分析
+
+- 上一篇發文：{{ last_post.posted_at_local }}（距今 {{ days_since_last }} 天）
+- 上一篇表現：{{ last_post.views }} 觀看 / {{ last_post.engagement_rate }}% 互動率
+- Freshness 狀態：{{ freshness_status }}
+{% if days_since_last < 1 %}- ⚠️ 自打風險：距上篇不到 24 小時{% endif %}
+
+### 歷史高表現發文時段
+{% for hour, rate in hour_distribution.items() %}
+- {{ hour }}:00 — 平均互動率 {{ rate }}%
+{% endfor %}
+
+## Engagement Economics 分析
+
+- 平均互動率：{{ stats.avg_engagement_rate }}%
+- 互動組成：按讚 {{ stats.like_pct }}% / 回覆 {{ stats.reply_pct }}% / 轉發 {{ stats.repost_pct }}%
+- 作者平均回覆：{{ stats.avg_author_replies }} 則/篇
+- 分析樣本：{{ stats.post_count }} 篇貼文
+
+## 歷史表現 Top {{ top_posts | length }}
+
+| # | 內容摘要 | 觀看 | 互動率 | 作者回覆 | 時段 |
+|---|---------|------|--------|---------|------|
+{% for p in top_posts %}| {{ loop.index }} | {{ p.text_preview }} | {{ p.views }} | {{ p.engagement_rate }}% | {{ p.author_reply_count }} | {{ p.post_hour_local }}:00 |
+{% endfor %}{% endif %}
+
+---
+*由 Threads Pipeline V2.5 Advisor 自動產生*
