@@ -24,6 +24,14 @@ python -m pytest tests/test_analyzer.py::TestParseAnalysis::test_valid_json
 
 # Run API exploration tests
 python3 scripts/api_explorer.py
+
+# Run advisor analyze (from parent directory 桌面/)
+$env:PYTHONUTF8=1; python -m threads_pipeline.advisor analyze
+PYTHONUTF8=1 python -m threads_pipeline.advisor analyze
+
+# Run advisor review (from parent directory 桌面/)
+$env:PYTHONUTF8=1; python -m threads_pipeline.advisor review drafts/my-post.txt
+$env:PYTHONUTF8=1; python -m threads_pipeline.advisor review --text "草稿文字"
 ```
 
 ## Project Structure
@@ -36,10 +44,15 @@ threads_pipeline/
 ├── threads_client.py             # Threads API 封裝（搜尋、Token 驗證/續期）
 ├── analyzer.py                   # AI 分析（claude -p subprocess）
 ├── insights_tracker.py           # SQLite insights 追蹤
+├── db_helpers.py                 # 共用 DB 連線與查詢
+├── advisor.py                    # 發文顧問（analyze + review via Codex CLI）
 ├── report.py                     # Jinja2 報告渲染 + 存檔
+├── references/
+│   └── copywriting-frameworks.md # 16+1 爆款文案結構框架
 ├── templates/
 │   ├── daily_report.md.j2        # 趨勢日報模板
-│   └── dashboard_report.md.j2    # 戰情日報模板
+│   ├── dashboard_report.md.j2    # 戰情日報模板
+│   └── advisor_report.md.j2      # 發文顧問分析報告模板
 ├── tests/
 │   ├── conftest.py
 │   ├── test_analyzer.py

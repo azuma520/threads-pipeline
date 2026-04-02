@@ -287,11 +287,19 @@ def _cmd_analyze(args):
     """執行 analyze 子指令。"""
     from threads_pipeline.main import _load_dotenv, load_config
     from threads_pipeline.db_helpers import get_readonly_connection
+    from threads_pipeline.insights_tracker import init_db
 
     _load_dotenv()
     config = load_config()
 
     report_date = args.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # 先跑 migration 確保 schema 是最新的
+    try:
+        migration_conn = init_db(config)
+        migration_conn.close()
+    except Exception:
+        pass
 
     try:
         conn = get_readonly_connection(config)

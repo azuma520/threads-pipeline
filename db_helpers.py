@@ -10,9 +10,9 @@ def get_db_path(config: dict) -> Path:
     data_dir = Path(insights_cfg.get("data_dir", "./data"))
     db_name = insights_cfg.get("db_name", "threads.db")
 
-    # 相對路徑以專案根目錄為基準
+    # 相對路徑以 CWD 為基準（與 insights_tracker.init_db 一致）
     if not data_dir.is_absolute():
-        data_dir = Path(__file__).parent / data_dir
+        data_dir = Path.cwd() / data_dir
 
     return data_dir / db_name
 

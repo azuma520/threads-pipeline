@@ -6,7 +6,7 @@
 |-------|------|------|
 | V1 | 趨勢收集 | 已完成 |
 | V2 | 成效追蹤 | 已完成，已驗證 |
-| V2.5 | 共鳴度分析 | 構想 |
+| V2.5 | 貼文健檢（發文顧問） | 已完成 |
 | V3 | 議題分析 + 內容資產追蹤 + 分享靈感 | 構想 |
 | V4 | 差異化觀點 + 全自動循環 | 願景 |
 
@@ -42,20 +42,21 @@
 
 ---
 
-## V2.5：共鳴度分析（構想）
+## V2.5：貼文健檢（發文顧問）（已完成，2026-04-02）
 
-核心理念：「分享自己，不是推銷自己。讓讀者認識你是誰。」
+**核心功能**：
+- `advisor analyze`：根據 SQLite 歷史數據產出帳號分析報告（Creator Embedding 觀察、Distribution Lifecycle、Engagement Economics）
+- `advisor review`：透過 Codex CLI 做第三方草稿審查（6 維度評分：鉤子、聚焦度、Takeaway、定位一致性、受眾匹配、結構完整性）
 
-在現有的趨勢分數基礎上，擴充 analyzer 的評分維度，加入「共鳴度分析」：
+**新增模組**：
+- `advisor.py` — analyze + review 子指令入口
+- `db_helpers.py` — 共用 DB 連線與查詢
+- `references/copywriting-frameworks.md` — 16+1 爆款文案結構框架
+- `templates/advisor_report.md.j2` — 分析報告 Jinja2 模板
 
-| 維度 | 說明 |
-|------|------|
-| 鉤子 | 有沒有讓人停下來的開頭 |
-| 真實經驗／故事 | 不是空談，有沒有自己的實作或經歷 |
-| Takeaway | 讀者看完能帶走什麼 |
-| 聚焦度 | 1 篇文 = 1 個切入點、1 種人、1 個問題 |
+**Schema 擴充**：`full_text`、`post_hour_local`、`author_reply_count`（含向後相容 migration）
 
-靈感來源是「鉤子 → 故事 → 成交」的文案框架，但出發點是分享而非銷售。評分結果用於篩選值得參考的外部貼文，以及回顧自己過去哪些貼文真正引起共鳴。
+**設計文件**：[spec](../superpowers/specs/2026-04-02-post-advisor-design.md) | [plan](../superpowers/plans/2026-04-02-post-advisor.md) | [Codex review](../superpowers/specs/2026-04-02-post-advisor-codex-review.md)
 
 ---
 
