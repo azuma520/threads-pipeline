@@ -251,3 +251,141 @@ def review_draft(
         return f"審查失敗（超時 {timeout} 秒）。請手動檢查草稿。"
     except FileNotFoundError:
         return "審查失敗：找不到 codex CLI。請確認已安裝。"
+
+
+# ── CLI 入口 ─────────────────────────────────────────────
+
+import argparse
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Threads 發文顧問")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # analyze
+    analyze_parser = subparsers.add_parser("analyze", help="產生數據分析報告")
+    analyze_parser.add_argument("--date", default=None, help="報告日期 (YYYY-MM-DD)")
+
+    # review
+    review_parser = subparsers.add_parser("review", help="審查草稿")
+    review_parser.add_argument("file", nargs="?", help="草稿檔案路徑")
+    review_parser.add_argument("--text", help="直接輸入草稿文字")
+    review_parser.add_argument("--plan", help="指定 plan 檔案路徑")
+    review_parser.add_argument("--analysis", help="指定 analysis JSON 路徑")
+
+    args = parser.parse_args()
+
+    if args.command == "analyze":
+        _cmd_analyze(args)
+    elif args.command == "review":
+        _cmd_review(args)
+    else:
+        parser.print_help()
+
+
+def _cmd_analyze(args):
+    """執行 analyze 子指令。"""
+    from threads_pipeline.main import _load_dotenv, load_config
+    from threads_pipeline.db_helpers import get_readonly_connection
+
+    _load_dotenv()
+    config = load_config()
+
+    report_date = args.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    try:
+        conn = get_readonly_connection(config)
+    except FileNotFoundError as e:
+        print(f"✗ {e}")
+        print("  請先執行 Pipeline 收集數據")
+        return
+
+    # 產生報告
+    report = generate_analysis(conn, report_date)
+
+    # 產生 JSON 摘要
+    analysis_json = generate_analysis_json(conn)
+    conn.close()
+
+    # 存檔
+    output_dir = Path(__file__).parent / "output" / "advisor"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    report_path = output_dir / f"analysis_{report_date}.md"
+    report_path.write_text(report, encoding="utf-8")
+    print(f"✓ 分析報告：{report_path}")
+
+    json_path = output_dir / f"analysis_{report_date}.json"
+    json_path.write_text(json.dumps(analysis_json, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"✓ 審查摘要：{json_path}")
+
+
+def _cmd_review(args):
+    """執行 review 子指令。"""
+    # 讀取草稿
+    if args.file:
+        draft_path = Path(args.file)
+        if not draft_path.exists():
+            print(f"✗ 找不到草稿檔案: {draft_path}")
+            return
+        draft = draft_path.read_text(encoding="utf-8")
+        topic_id = draft_path.stem
+    elif args.text:
+        draft = args.text
+        topic_id = "inline"
+    else:
+        print("✗ 請提供草稿檔案或 --text 參數")
+        return
+
+    if not draft.strip():
+        print("✗ 草稿為空")
+        return
+
+    if len(draft) > 2000:
+        print(f"⚠ 草稿偏長（{len(draft)} 字），建議精簡到 2000 字以內")
+
+    # 讀取 analysis JSON
+    analysis_json = {}
+    if args.analysis:
+        analysis_path = Path(args.analysis)
+    else:
+        # 自動找最新的
+        advisor_dir = Path(__file__).parent / "output" / "advisor"
+        json_files = sorted(advisor_dir.glob("analysis_*.json"), reverse=True)
+        analysis_path = json_files[0] if json_files else None
+
+    if analysis_path and analysis_path.exists():
+        analysis_json = json.loads(analysis_path.read_text(encoding="utf-8"))
+        print(f"✓ 讀取分析摘要：{analysis_path}")
+    else:
+        print("⚠ 找不到分析摘要，跳過數據維度")
+
+    # 讀取 plan
+    plan_content = None
+    if args.plan:
+        plan_path = Path(args.plan)
+    else:
+        # 自動找同名 plan
+        plan_path = Path(f"drafts/{topic_id}.plan.md")
+
+    if plan_path and plan_path.exists():
+        plan_content = plan_path.read_text(encoding="utf-8")
+        print(f"✓ 讀取發文規劃：{plan_path}")
+    else:
+        print("⚠ 找不到發文規劃，跳過受眾匹配和結構完整性維度")
+
+    # 審查
+    print("\n正在審查草稿（Codex CLI）...")
+    result = review_draft(draft, analysis_json, plan_content)
+    print("\n" + result)
+
+    # 存檔
+    if args.file:
+        review_path = Path(f"drafts/{topic_id}.review.md")
+        review_path.parent.mkdir(parents=True, exist_ok=True)
+        review_path.write_text(result, encoding="utf-8")
+        print(f"\n✓ 審查結果：{review_path}")
+
+
+if __name__ == "__main__":
+    main()
