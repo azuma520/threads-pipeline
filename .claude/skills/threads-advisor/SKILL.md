@@ -100,11 +100,15 @@ CLI 會把產出寫到 `drafts/<timestamp>-<slug>.plan.md`（gitignored）。
 ### Step 5 — 寫完整草稿（使用者要求時才做）
 
 骨架是模板、草稿是成品。這一步最容易產出 AI 味、不像使用者的文字，
-**必須**先讀兩份參考：
+**必須依序**先讀三份參考：
 
-1. **Read `references/content-structure.md`** — 判斷這篇屬於哪種結構
+1. **Read `references/writing-philosophy.md`** — 最上層哲學：
+   分享者不是教學者、過程不是結果、不要讓人覺得厲害、誠實優先、節制、不討好
+2. **Read `references/content-structure.md`** — 判斷這篇屬於哪種結構
    （預設：認知翻轉鏈；除非題材明確是分析評測 / 深度內省 / 自由書寫 / 讀後感系列）
-2. **Read `references/voice-patterns.md`** — 鎖定語氣、句式、情緒標點、禁用詞
+3. **Read `references/voice-patterns.md`** — 鎖定語氣、句式、情緒標點、禁用詞
+
+如果有 `references/writing-examples.md`，也讀 — 那是語氣終極校準錨點。
 
 **流程**：
 1. 根據骨架 + 選定結構，把每條貼文寫出文字
