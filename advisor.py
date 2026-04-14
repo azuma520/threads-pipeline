@@ -595,10 +595,48 @@ def _cmd_plan(args) -> int:
 
 
 def _interactive_pick_framework(topic: str, frameworks_md: str) -> int | str | None:
-    """暫時用 auto 行為；Task 8b 會替換為真正的互動 UI。"""
+    """互動詢問使用者選框架。回傳框架 id 或 None（取消）。"""
     from threads_pipeline import planner
-    suggestions = planner.suggest_frameworks(topic=topic, frameworks_md=frameworks_md)
-    return suggestions[0]["framework"] if suggestions else None
+    import sys as _sys
+
+    print("正在分析題目適合的結構（claude -p haiku）...", file=_sys.stderr)
+    try:
+        suggestions = planner.suggest_frameworks(topic=topic, frameworks_md=frameworks_md)
+    except planner.PlannerError as e:
+        print(f"✗ Stage 1 失敗：{e}", file=_sys.stderr)
+        return None
+
+    all_frameworks = planner.list_frameworks(frameworks_md)
+    fw_by_id = {fw["id"]: fw for fw in all_frameworks}
+
+    while True:
+        print("\nLLM 建議 3 個候選框架：\n", file=_sys.stderr)
+        for s in suggestions:
+            star = " ★推薦" if s["rank"] == 1 else ""
+            fw = fw_by_id.get(s["framework"], {})
+            formula = fw.get("formula", "")
+            print(f"  [{s['rank']}] {s['framework']:02d} {s['name']}{star}", file=_sys.stderr)
+            if formula:
+                print(f"      公式：{formula}", file=_sys.stderr)
+            print(f"      為什麼：{s['reason']}", file=_sys.stderr)
+            print("", file=_sys.stderr)
+
+        ans = input("請選擇 [1/2/3 / a=全部列出 / q=取消]: ").strip().lower()
+
+        if ans == "q":
+            return None
+        if ans == "a":
+            print("\n全部 16+1 框架：\n", file=_sys.stderr)
+            for fw in all_frameworks:
+                print(f"  {fw['id']:02d} {fw['name']} — {fw['when_to_use']}", file=_sys.stderr)
+                print(f"      公式：{fw['formula']}", file=_sys.stderr)
+            print("", file=_sys.stderr)
+            continue
+        if ans in {"1", "2", "3"}:
+            idx = int(ans) - 1
+            if idx < len(suggestions):
+                return suggestions[idx]["framework"]
+        print(f"⚠ 無效輸入：{ans}", file=_sys.stderr)
 
 
 def _cmd_list_frameworks(args) -> int:

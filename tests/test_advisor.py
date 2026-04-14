@@ -291,7 +291,6 @@ class TestCmdPlanNonInteractive:
         assert rc == 0
         assert "非 tty" in captured.err or "auto" in captured.err.lower()
 
-    @pytest.mark.xfail(reason="Task 8b implements real q/cancel handling")
     def test_plan_interactive_q_exits_2(self, fake_env, monkeypatch):
         """使用者互動選 q → 整體 exit code 2。"""
         from threads_pipeline.advisor import _cmd_plan
@@ -307,3 +306,54 @@ class TestCmdPlanNonInteractive:
                    return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
             rc = _cmd_plan(args)
         assert rc == 2
+
+
+class TestInteractivePicker:
+    def test_picks_choice_1(self, monkeypatch):
+        from threads_pipeline import advisor
+        monkeypatch.setattr("builtins.input", lambda _: "1")
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | 逆襲引流 | A | 成功經驗 |\n| 7 | PREP | B | 觀點 |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"逆襲引流","reason":"r1"},{"framework":7,"name":"PREP","reason":"r2"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 11
+
+    def test_picks_choice_2(self, monkeypatch):
+        from threads_pipeline import advisor
+        monkeypatch.setattr("builtins.input", lambda _: "2")
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n| 7 | B | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"},{"framework":7,"name":"B","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 7
+
+    def test_q_returns_none(self, monkeypatch):
+        from threads_pipeline import advisor
+        monkeypatch.setattr("builtins.input", lambda _: "q")
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result is None
+
+    def test_a_lists_then_picks(self, monkeypatch):
+        """輸入 a → 列出全部 → 再問一次 → 輸入 1 → 返回第 1 建議。"""
+        from threads_pipeline import advisor
+        inputs = iter(["a", "1"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 11
+
+    def test_invalid_then_valid(self, monkeypatch):
+        """亂輸入 → 再問 → 正確 → 成功。"""
+        from threads_pipeline import advisor
+        inputs = iter(["99", "foo", "1"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 11
