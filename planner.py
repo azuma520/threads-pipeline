@@ -305,3 +305,14 @@ def _resolve_id(frameworks_md: str, key: int | str) -> int:
         if (isinstance(key, int) and fw["id"] == key) or (isinstance(key, str) and fw["name"] == key):
             return fw["id"]
     raise PlannerError(f"無法解析框架 id：{key}")
+
+
+def resolve_plan_config(config: dict, cli_model: str | None, cli_style_posts: int | None, cli_format: str | None) -> dict:
+    """CLI 旗標優先，config.yaml 其次，程式預設最後。"""
+    plan_cfg = (config.get("advisor") or {}).get("plan") or {}
+    return {
+        "stage1_model": plan_cfg.get("stage1_model", "haiku"),
+        "stage2_model": cli_model or plan_cfg.get("stage2_model", "sonnet"),
+        "style_posts": cli_style_posts if cli_style_posts is not None else plan_cfg.get("default_style_posts", 3),
+        "format": cli_format or plan_cfg.get("default_format", "thread"),
+    }

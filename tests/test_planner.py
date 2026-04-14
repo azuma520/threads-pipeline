@@ -318,3 +318,32 @@ class TestGeneratePlan:
                     topic="題目", frameworks_md=frameworks_md, top_posts=[],
                     framework=None, fmt="thread", stage2_model="sonnet", auto=True,
                 )
+
+
+class TestResolvePlanConfig:
+    def test_cli_wins(self):
+        from threads_pipeline.planner import resolve_plan_config
+        out = resolve_plan_config(
+            config={"advisor": {"plan": {"stage2_model": "sonnet", "default_style_posts": 5}}},
+            cli_model="haiku", cli_style_posts=1, cli_format="single",
+        )
+        assert out["stage2_model"] == "haiku"
+        assert out["style_posts"] == 1
+        assert out["format"] == "single"
+
+    def test_config_used_when_no_cli(self):
+        from threads_pipeline.planner import resolve_plan_config
+        out = resolve_plan_config(
+            config={"advisor": {"plan": {"stage2_model": "opus", "default_style_posts": 7}}},
+            cli_model=None, cli_style_posts=None, cli_format=None,
+        )
+        assert out["stage2_model"] == "opus"
+        assert out["style_posts"] == 7
+        assert out["format"] == "thread"
+
+    def test_defaults_when_no_config(self):
+        from threads_pipeline.planner import resolve_plan_config
+        out = resolve_plan_config(config={}, cli_model=None, cli_style_posts=None, cli_format=None)
+        assert out["stage2_model"] == "sonnet"
+        assert out["style_posts"] == 3
+        assert out["format"] == "thread"
