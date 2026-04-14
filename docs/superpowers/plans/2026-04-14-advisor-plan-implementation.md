@@ -122,7 +122,8 @@ import pytest
 class TestSlugify:
     def test_chinese_only(self):
         from threads_pipeline.planner import slugify
-        assert slugify("我學 Claude Code 一個月的心得") == "我學-claude-code-一個月的心得"
+        # 原始 21 字會被 20 字上限截掉最後「得」
+        assert slugify("我學 Claude Code 一個月的心得") == "我學-claude-code-一個月的心"
 
     def test_strips_illegal_chars(self):
         from threads_pipeline.planner import slugify
