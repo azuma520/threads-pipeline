@@ -37,3 +37,52 @@ class TestSlugify:
     def test_multiple_spaces_collapse(self):
         from threads_pipeline.planner import slugify
         assert slugify("hello    world") == "hello-world"
+
+
+class TestExtractFrameworkSection:
+    @pytest.fixture
+    def sample_md(self):
+        return """# 爆款文案腳本 16+1 結構
+
+## 結構總覽
+
+| # | 名稱 | 公式 | 適用場景 |
+|---|------|-----|---------|
+| 01 | 引爆行動 | 觀點 → 危害 → 論據 → 結論 | 想改變讀者行為 |
+| 11 | 逆襲引流 | 積極結果 → 獲得感 → 方案 → 互動結尾 | 分享成功經驗 |
+| 15 | 通用類 | 鉤子開頭 → 塑造期待 → 解決方案 → 結尾 | 萬用結構 |
+
+## 4 類結尾
+| 類型 | 特點 |
+|------|------|
+| 互動式 | 引導留言 |
+"""
+
+    def test_extract_by_id(self, sample_md):
+        from threads_pipeline.planner import extract_framework_section
+        out = extract_framework_section(sample_md, 11)
+        assert "逆襲引流" in out
+        assert "積極結果" in out
+        assert "分享成功經驗" in out
+
+    def test_extract_by_name(self, sample_md):
+        from threads_pipeline.planner import extract_framework_section
+        out = extract_framework_section(sample_md, "逆襲引流")
+        assert "11" in out
+        assert "積極結果" in out
+
+    def test_unknown_returns_none(self, sample_md):
+        from threads_pipeline.planner import extract_framework_section
+        assert extract_framework_section(sample_md, 99) is None
+        assert extract_framework_section(sample_md, "不存在") is None
+
+    def test_list_all_frameworks(self, sample_md):
+        from threads_pipeline.planner import list_frameworks
+        result = list_frameworks(sample_md)
+        assert len(result) == 3
+        ids = [fw["id"] for fw in result]
+        assert 1 in ids and 11 in ids and 15 in ids
+        fw11 = next(fw for fw in result if fw["id"] == 11)
+        assert fw11["name"] == "逆襲引流"
+        assert "積極結果" in fw11["formula"]
+        assert "分享成功經驗" in fw11["when_to_use"]
