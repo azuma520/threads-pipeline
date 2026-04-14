@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 
@@ -72,3 +73,33 @@ def extract_framework_section(md: str, key: int | str) -> str | None:
                 f"適用場景：{fw['when_to_use']}"
             )
     return None
+
+
+class PlannerError(Exception):
+    """planner 錯誤基類。"""
+
+
+def parse_suggestions_json(stdout: str) -> list[dict]:
+    """解析 Stage 1 的 JSON 回應。失敗直接 raise PlannerError（不做 fallback）。"""
+    text = stdout.strip()
+    # 容錯：LLM 常常忘了「不要 markdown code fence」指示
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise PlannerError(f"JSON 解析失敗：{e}；原始輸出：{stdout[:200]}") from e
+    if "suggestions" not in data or not isinstance(data["suggestions"], list):
+        raise PlannerError(f"缺少 suggestions 陣列；原始輸出：{stdout[:200]}")
+    out = []
+    for i, s in enumerate(data["suggestions"], start=1):
+        if "framework" not in s or "name" not in s or "reason" not in s:
+            raise PlannerError(f"第 {i} 個 suggestion 缺欄位：{s}")
+        out.append({
+            "framework": int(s["framework"]),
+            "name": s["name"],
+            "reason": s["reason"],
+            "rank": i,
+        })
+    return out

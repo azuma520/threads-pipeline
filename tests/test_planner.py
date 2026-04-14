@@ -86,3 +86,40 @@ class TestExtractFrameworkSection:
         assert fw11["name"] == "逆襲引流"
         assert "積極結果" in fw11["formula"]
         assert "分享成功經驗" in fw11["when_to_use"]
+
+
+class TestParseSuggestionsJson:
+    def test_valid(self):
+        from threads_pipeline.planner import parse_suggestions_json
+        stdout = '{"suggestions": [{"framework": 11, "name": "逆襲引流", "reason": "好"}]}'
+        result = parse_suggestions_json(stdout)
+        assert len(result) == 1
+        assert result[0]["framework"] == 11
+        assert result[0]["rank"] == 1
+
+    def test_multiple_ranked(self):
+        from threads_pipeline.planner import parse_suggestions_json
+        stdout = '{"suggestions": [{"framework": 11, "name": "A", "reason": "r1"}, {"framework": 7, "name": "B", "reason": "r2"}]}'
+        result = parse_suggestions_json(stdout)
+        assert [s["rank"] for s in result] == [1, 2]
+
+    def test_invalid_json_raises(self):
+        from threads_pipeline.planner import parse_suggestions_json, PlannerError
+        with pytest.raises(PlannerError, match="解析"):
+            parse_suggestions_json("not json")
+
+    def test_missing_suggestions_key_raises(self):
+        from threads_pipeline.planner import parse_suggestions_json, PlannerError
+        with pytest.raises(PlannerError):
+            parse_suggestions_json('{"foo": []}')
+
+    def test_missing_framework_field_raises(self):
+        from threads_pipeline.planner import parse_suggestions_json, PlannerError
+        with pytest.raises(PlannerError):
+            parse_suggestions_json('{"suggestions": [{"name": "x"}]}')
+
+    def test_strips_markdown_code_fence(self):
+        from threads_pipeline.planner import parse_suggestions_json
+        stdout = '```json\n{"suggestions": [{"framework": 11, "name": "A", "reason": "r"}]}\n```'
+        result = parse_suggestions_json(stdout)
+        assert result[0]["framework"] == 11
