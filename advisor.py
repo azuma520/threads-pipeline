@@ -31,11 +31,11 @@ def load_config():
 # 可被 ADVISOR_* 環境變數覆寫（Layer 3 eval 與使用者自訂用）
 FRAMEWORKS_MD_PATH = os.environ.get(
     "ADVISOR_FRAMEWORKS_MD",
-    str(Path(__file__).parent.parent / "references" / "copywriting-frameworks.md"),
+    str(Path(__file__).parent / "references" / "copywriting-frameworks.md"),
 )
 DRAFTS_DIR = os.environ.get(
     "ADVISOR_DRAFTS_DIR",
-    str(Path(__file__).parent.parent / "drafts"),
+    str(Path(__file__).parent / "drafts"),
 )
 
 
