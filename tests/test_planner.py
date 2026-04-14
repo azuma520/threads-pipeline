@@ -175,3 +175,60 @@ class TestPromptBuilders:
         )
         assert "## 風格範本" in prompt
         assert "貼文A" in prompt
+
+
+from unittest.mock import patch, MagicMock
+
+
+class TestCallClaude:
+    def test_success_prompt_in_argv(self):
+        """prompt 透過 argv 傳入（對齊 analyzer.py），非 stdin。"""
+        from threads_pipeline.planner import _call_claude
+        with patch("threads_pipeline.planner.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="result", stderr="")
+            out = _call_claude("prompt text", model="haiku")
+            assert out == "result"
+            args, kwargs = mock_run.call_args
+            cmd = args[0]
+            assert cmd[0] == "claude"
+            assert cmd[1] == "-p"
+            assert cmd[2] == "prompt text"  # argv #2 = prompt
+            assert "--model" in cmd
+            assert "haiku" in cmd
+            assert kwargs.get("input") is None  # NOT stdin
+            assert kwargs["encoding"] == "utf-8"
+            assert kwargs["timeout"] == 60
+
+    def test_nonzero_exit_raises(self):
+        from threads_pipeline.planner import _call_claude, PlannerError
+        with patch("threads_pipeline.planner.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+            with pytest.raises(PlannerError, match="claude"):
+                _call_claude("p", model="haiku")
+
+    def test_timeout_retries_once_then_raises(self):
+        import subprocess
+        from threads_pipeline.planner import _call_claude, PlannerError
+        with patch("threads_pipeline.planner.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="claude", timeout=60)
+            with pytest.raises(PlannerError, match="超時"):
+                _call_claude("p", model="haiku")
+            assert mock_run.call_count == 2  # 1 次 + 1 次 retry
+
+    def test_windows_uses_shell(self):
+        from threads_pipeline.planner import _call_claude
+        with patch("threads_pipeline.planner.platform.system", return_value="Windows"):
+            with patch("threads_pipeline.planner.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+                _call_claude("p", model="haiku")
+                _, kwargs = mock_run.call_args
+                assert kwargs["shell"] is True
+
+    def test_non_windows_no_shell(self):
+        from threads_pipeline.planner import _call_claude
+        with patch("threads_pipeline.planner.platform.system", return_value="Linux"):
+            with patch("threads_pipeline.planner.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+                _call_claude("p", model="haiku")
+                _, kwargs = mock_run.call_args
+                assert kwargs["shell"] is False

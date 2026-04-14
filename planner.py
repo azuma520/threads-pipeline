@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import platform
 import re
+import subprocess
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
+
+_CLAUDE_TIMEOUT_SEC = 60
 
 _ILLEGAL_FILENAME = re.compile(r'[/\\:*?"<>|]')
 _WHITESPACE = re.compile(r"\s+")
@@ -194,3 +201,38 @@ def build_stage2_prompt(
         parts.append(_STAGE2_STYLE_SECTION.format(style_posts_rendered="\n".join(rendered)))
     parts.append(_STAGE2_OUTPUT_SPEC.format(fmt=fmt))
     return "".join(parts)
+
+
+def _call_claude(prompt: str, model: str) -> str:
+    """Run `claude -p <prompt> --model <model>`, return stdout.
+
+    Prompt 透過 argv 傳入（對齊 analyzer.py），不用 stdin。
+    Windows 沿用 advisor.review_draft 的 shell=True 模式（commit 7ee59e0）。
+    TODO(shell-fix): 另開 ticket 把整個專案的 Windows subprocess 改成
+    shell=False + claude.cmd 絕對路徑，避免 shell 注入風險。
+    Retries once on timeout.
+    """
+    use_shell = platform.system() == "Windows"
+    cmd = ["claude", "-p", prompt, "--model", model]
+
+    last_err: Exception | None = None
+    for attempt in range(2):  # 1 次 + 1 次 retry
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=_CLAUDE_TIMEOUT_SEC,
+                encoding="utf-8",
+                shell=use_shell,
+            )
+            if result.returncode != 0:
+                raise PlannerError(
+                    f"claude -p exit {result.returncode}; stderr: {result.stderr[:500]}"
+                )
+            return result.stdout
+        except subprocess.TimeoutExpired as e:
+            last_err = e
+            logger.warning("claude -p 超時 (attempt %d/2)", attempt + 1)
+            continue
+    raise PlannerError(f"claude -p 超時 {_CLAUDE_TIMEOUT_SEC}s x2 retries") from last_err
