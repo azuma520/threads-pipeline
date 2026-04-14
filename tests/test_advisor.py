@@ -133,3 +133,227 @@ class TestReviewDraft:
         mock_run.return_value = MagicMock(returncode=1, stderr="error")
         result = review_draft("草稿", analysis_json={})
         assert "審查失敗" in result
+
+
+def test_review_prompt_plan_truncation_is_4000():
+    long_plan = "P" * 5000
+    prompt = _build_review_prompt(draft="draft", analysis_json={}, plan_content=long_plan)
+    assert "P" * 4000 in prompt
+    assert "P" * 4001 not in prompt
+
+
+class TestCmdPlanNonInteractive:
+    @pytest.fixture
+    def fake_env(self, tmp_path, sample_db, monkeypatch):
+        """Patch config loader, DB path, frameworks md, and drafts dir."""
+        fake_fw_md = tmp_path / "frameworks.md"
+        fake_fw_md.write_text(
+            "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n"
+            "| 11 | 逆襲引流 | A → B | 分享成功經驗 |\n",
+            encoding="utf-8",
+        )
+        drafts_dir = tmp_path / "drafts"
+        drafts_dir.mkdir()
+
+        monkeypatch.setattr(
+            "threads_pipeline.advisor.load_config", lambda: {
+                "storage": {"sqlite_path": str(sample_db)},
+                "advisor": {"plan": {"stage2_model": "sonnet", "stage1_model": "haiku"}},
+            },
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "threads_pipeline.advisor.FRAMEWORKS_MD_PATH", str(fake_fw_md), raising=False,
+        )
+        monkeypatch.setattr(
+            "threads_pipeline.advisor.DRAFTS_DIR", str(drafts_dir), raising=False,
+        )
+        return {"drafts": drafts_dir}
+
+    def test_plan_with_framework_writes_file(self, fake_env):
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        args = argparse.Namespace(
+            topic="我學 Claude Code 一個月",
+            topic_file=None, framework=11, auto=False, format=None, style_posts=None,
+            model=None, suggest_only=False, json=False, overwrite=True, no_overwrite=False,
+        )
+        with patch("threads_pipeline.planner._call_claude", return_value="# 骨架內容"):
+            rc = _cmd_plan(args)
+        assert rc == 0
+        files = list(fake_env["drafts"].glob("*.plan.md"))
+        assert len(files) == 1
+        assert "骨架內容" in files[0].read_text(encoding="utf-8")
+
+    def test_plan_auto_uses_stage1_first_suggestion(self, fake_env):
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=None, auto=True, format=None,
+            style_posts=None, model=None, suggest_only=False, json=False,
+            overwrite=True, no_overwrite=False,
+        )
+        with patch("threads_pipeline.planner._call_claude") as mock_call:
+            mock_call.side_effect = [
+                '{"suggestions":[{"framework":11,"name":"逆襲引流","reason":"好"}]}',
+                "# 骨架",
+            ]
+            rc = _cmd_plan(args)
+        assert rc == 0
+
+    def test_plan_suggest_only_json_goes_to_stdout(self, fake_env, capsys):
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse, json as _json
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=None, auto=False, format=None,
+            style_posts=None, model=None, suggest_only=True, json=True,
+            overwrite=False, no_overwrite=False,
+        )
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"逆襲引流","reason":"好"}]}'):
+            rc = _cmd_plan(args)
+        assert rc == 0
+        captured = capsys.readouterr()
+        data = _json.loads(captured.out)
+        assert data["suggestions"][0]["framework"] == 11
+
+    def test_plan_json_parse_fail_exits_3(self, fake_env):
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=None, auto=True, format=None,
+            style_posts=None, model=None, suggest_only=False, json=False,
+            overwrite=True, no_overwrite=False,
+        )
+        with patch("threads_pipeline.planner._call_claude", return_value="not json"):
+            rc = _cmd_plan(args)
+        assert rc == 3
+
+    def test_plan_unknown_framework_exits_1(self, fake_env):
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=99, auto=False, format=None,
+            style_posts=None, model=None, suggest_only=False, json=False,
+            overwrite=True, no_overwrite=False,
+        )
+        rc = _cmd_plan(args)
+        assert rc == 1
+
+    def test_plan_file_exists_no_overwrite_exits_4(self, fake_env):
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        (fake_env["drafts"] / "題目.plan.md").write_text("existing", encoding="utf-8")
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=11, auto=False, format=None,
+            style_posts=None, model=None, suggest_only=False, json=False,
+            overwrite=False, no_overwrite=True,
+        )
+        with patch("threads_pipeline.planner._call_claude", return_value="new"):
+            rc = _cmd_plan(args)
+        assert rc == 4
+
+    def test_plan_stdout_is_path_only_stderr_has_progress(self, fake_env, capsys):
+        """agent-friendly：stdout 只含路徑、stderr 含進度訊息。"""
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=11, auto=False, format=None,
+            style_posts=None, model=None, suggest_only=False, json=False,
+            overwrite=True, no_overwrite=False,
+        )
+        with patch("threads_pipeline.planner._call_claude", return_value="# 骨架"):
+            rc = _cmd_plan(args)
+        captured = capsys.readouterr()
+        assert rc == 0
+        stdout_lines = [l for l in captured.out.strip().splitlines() if l.strip()]
+        assert len(stdout_lines) == 1
+        assert stdout_lines[0].endswith(".plan.md")
+        assert "寫入" in captured.err or "框架" in captured.err
+
+    def test_plan_non_tty_auto_fallback(self, fake_env, monkeypatch, capsys):
+        """stdin 非 tty 且沒給 --auto / --framework → 自動等同 --auto，stderr 警告。"""
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=None, auto=False, format=None,
+            style_posts=None, model=None, suggest_only=False, json=False,
+            overwrite=True, no_overwrite=False,
+        )
+        with patch("threads_pipeline.planner._call_claude") as mock_call:
+            mock_call.side_effect = [
+                '{"suggestions":[{"framework":11,"name":"逆襲引流","reason":"好"}]}',
+                "# 骨架",
+            ]
+            rc = _cmd_plan(args)
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "非 tty" in captured.err or "auto" in captured.err.lower()
+
+    def test_plan_interactive_q_exits_2(self, fake_env, monkeypatch):
+        """使用者互動選 q → 整體 exit code 2。"""
+        from threads_pipeline.advisor import _cmd_plan
+        import argparse
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        monkeypatch.setattr("builtins.input", lambda _: "q")
+        args = argparse.Namespace(
+            topic="題目", topic_file=None, framework=None, auto=False, format=None,
+            style_posts=None, model=None, suggest_only=False, json=False,
+            overwrite=True, no_overwrite=False,
+        )
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
+            rc = _cmd_plan(args)
+        assert rc == 2
+
+
+class TestInteractivePicker:
+    def test_picks_choice_1(self, monkeypatch):
+        from threads_pipeline import advisor
+        monkeypatch.setattr("builtins.input", lambda _: "1")
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | 逆襲引流 | A | 成功經驗 |\n| 7 | PREP | B | 觀點 |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"逆襲引流","reason":"r1"},{"framework":7,"name":"PREP","reason":"r2"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 11
+
+    def test_picks_choice_2(self, monkeypatch):
+        from threads_pipeline import advisor
+        monkeypatch.setattr("builtins.input", lambda _: "2")
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n| 7 | B | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"},{"framework":7,"name":"B","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 7
+
+    def test_q_returns_none(self, monkeypatch):
+        from threads_pipeline import advisor
+        monkeypatch.setattr("builtins.input", lambda _: "q")
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result is None
+
+    def test_a_lists_then_picks(self, monkeypatch):
+        """輸入 a → 列出全部 → 再問一次 → 輸入 1 → 返回第 1 建議。"""
+        from threads_pipeline import advisor
+        inputs = iter(["a", "1"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 11
+
+    def test_invalid_then_valid(self, monkeypatch):
+        """亂輸入 → 再問 → 正確 → 成功。"""
+        from threads_pipeline import advisor
+        inputs = iter(["99", "foo", "1"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+        fw_md = "## 結構總覽\n| # | 名稱 | 公式 | 適用場景 |\n|---|------|-----|---------|\n| 11 | A | x | y |\n"
+        with patch("threads_pipeline.planner._call_claude",
+                   return_value='{"suggestions":[{"framework":11,"name":"A","reason":"r"}]}'):
+            result = advisor._interactive_pick_framework(topic="t", frameworks_md=fw_md)
+        assert result == 11

@@ -24,3 +24,10 @@ insights:
 
 output:
   directory: "./output/threads_reports"
+
+advisor:
+  plan:
+    stage2_model: sonnet  # Stage 2 骨架生成模型；可被 CLI --model 覆寫
+    stage1_model: haiku   # Stage 1 框架選擇模型（分類任務）
+    default_style_posts: 3
+    default_format: thread

@@ -2,7 +2,9 @@
 
 import json
 import logging
+import os
 import subprocess
+import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -19,6 +21,22 @@ from threads_pipeline.db_helpers import (
 logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+def load_config():
+    """延遲匯入 load_config，允許測試 monkeypatch。"""
+    from threads_pipeline.main import load_config as _load_config
+    return _load_config()
+
+
+# 可被 ADVISOR_* 環境變數覆寫（Layer 3 eval 與使用者自訂用）
+FRAMEWORKS_MD_PATH = os.environ.get(
+    "ADVISOR_FRAMEWORKS_MD",
+    str(Path(__file__).parent / "references" / "copywriting-frameworks.md"),
+)
+DRAFTS_DIR = os.environ.get(
+    "ADVISOR_DRAFTS_DIR",
+    str(Path(__file__).parent / "drafts"),
+)
 
 
 def _signdelta(value):
@@ -199,7 +217,7 @@ def _build_review_prompt(
     analysis_summary = json.dumps(analysis_json, ensure_ascii=False, indent=2) if analysis_json else "（無數據）"
 
     if plan_content:
-        plan_section = f"## 發文規劃\n{plan_content[:2000]}"
+        plan_section = f"## 發文規劃\n{plan_content[:4000]}"
         audience_note = "（參考發文規劃中的受眾設定）"
         structure_note = "（參考發文規劃中的建議結構）"
     else:
@@ -278,12 +296,35 @@ def main():
     review_parser.add_argument("--plan", help="指定 plan 檔案路徑")
     review_parser.add_argument("--analysis", help="指定 analysis JSON 路徑")
 
+    # plan
+    plan_parser = subparsers.add_parser("plan", help="產生串文骨架 plan.md")
+    plan_parser.add_argument("topic", nargs="?", help="題目（引號包起來）")
+    plan_parser.add_argument("--topic-file", help="從檔案讀題目（避免 shell 跳脫問題）")
+    plan_parser.add_argument("--framework", help="強制指定框架編號或名稱")
+    plan_parser.add_argument("--auto", action="store_true", help="跳過互動，用 LLM 第一推薦")
+    plan_parser.add_argument("--format", choices=["thread", "single"], help="預設 thread")
+    plan_parser.add_argument("--style-posts", type=int, help="風格範本條數，預設 3")
+    plan_parser.add_argument("--model", help="覆寫 Stage 2 模型（預設 sonnet）")
+    plan_parser.add_argument("--suggest-only", action="store_true", help="只跑 Stage 1 回建議")
+    plan_parser.add_argument("--json", action="store_true", help="結果以 JSON 輸出 (stdout)")
+    overwrite_group = plan_parser.add_mutually_exclusive_group()
+    overwrite_group.add_argument("--overwrite", action="store_true", help="檔案已存在直接覆寫")
+    overwrite_group.add_argument("--no-overwrite", action="store_true", help="檔案已存在即報錯")
+
+    # list-frameworks
+    list_parser = subparsers.add_parser("list-frameworks", help="列出 16+1 框架")
+    list_parser.add_argument("--json", action="store_true")
+
     args = parser.parse_args()
 
     if args.command == "analyze":
         _cmd_analyze(args)
     elif args.command == "review":
         _cmd_review(args)
+    elif args.command == "plan":
+        sys.exit(_cmd_plan(args))
+    elif args.command == "list-frameworks":
+        sys.exit(_cmd_list_frameworks(args))
     else:
         parser.print_help()
 
@@ -398,6 +439,223 @@ def _cmd_review(args):
         review_path.parent.mkdir(parents=True, exist_ok=True)
         review_path.write_text(result, encoding="utf-8")
         print(f"\n✓ 審查結果：{review_path}")
+
+
+def _get_db_connection_for_plan(config: dict):
+    """取得 DB 連線，優先使用 config['storage']['sqlite_path']（eval 隔離用）。"""
+    import sqlite3
+
+    storage = config.get("storage", {})
+    sqlite_path = storage.get("sqlite_path")
+    if sqlite_path:
+        p = Path(sqlite_path)
+        if not p.exists():
+            raise FileNotFoundError(f"資料庫不存在: {p}")
+        conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+        conn.execute("PRAGMA busy_timeout = 5000")
+        return conn
+
+    from threads_pipeline.db_helpers import get_readonly_connection
+    return get_readonly_connection(config)
+
+
+def _cmd_plan(args) -> int:
+    """plan 子指令入口。回傳 exit code（給 main() sys.exit 用）。"""
+    from threads_pipeline import planner
+    from threads_pipeline.main import _load_dotenv
+    from threads_pipeline.db_helpers import get_top_posts
+    import sys as _sys
+
+    _load_dotenv()
+    config = load_config()
+
+    # 讀題目
+    topic = args.topic
+    if args.topic_file:
+        topic_path = Path(args.topic_file)
+        if not topic_path.exists():
+            print(f"✗ 找不到題目檔案：{topic_path}", file=_sys.stderr)
+            return 1
+        topic = topic_path.read_text(encoding="utf-8").strip()
+    if not topic:
+        print("✗ 請提供題目（引號字串或 --topic-file）", file=_sys.stderr)
+        return 1
+
+    # 讀 frameworks md
+    fw_md = Path(FRAMEWORKS_MD_PATH).read_text(encoding="utf-8")
+
+    # 解析 --framework（支援編號或名稱）
+    framework_arg: int | str | None = None
+    if args.framework:
+        try:
+            framework_arg = int(args.framework)
+        except ValueError:
+            framework_arg = args.framework
+        section = planner.extract_framework_section(fw_md, framework_arg)
+        if section is None:
+            print(f"✗ 未知框架：{args.framework}", file=_sys.stderr)
+            print("合法選項：", file=_sys.stderr)
+            for fw in planner.list_frameworks(fw_md):
+                print(f"  {fw['id']:02d} {fw['name']}", file=_sys.stderr)
+            return 1
+
+    # resolve config
+    plan_cfg = planner.resolve_plan_config(
+        config, cli_model=args.model, cli_style_posts=args.style_posts, cli_format=args.format,
+    )
+
+    # --suggest-only
+    if args.suggest_only:
+        try:
+            suggestions = planner.suggest_frameworks(topic=topic, frameworks_md=fw_md)
+        except planner.PlannerError as e:
+            print(f"✗ {e}", file=_sys.stderr)
+            return 3
+        if args.json:
+            import json as _json
+            print(_json.dumps({"suggestions": suggestions}, ensure_ascii=False))
+        else:
+            for s in suggestions:
+                print(f"[{s['rank']}] {s['framework']:02d} {s['name']}", file=_sys.stderr)
+                print(f"    {s['reason']}", file=_sys.stderr)
+        return 0
+
+    # 讀 top posts
+    try:
+        conn = _get_db_connection_for_plan(config)
+    except FileNotFoundError:
+        if plan_cfg["style_posts"] > 0:
+            print("⚠ 找不到 SQLite，風格範本將為空", file=_sys.stderr)
+        top_posts = []
+    else:
+        raw_posts = get_top_posts(conn, limit=plan_cfg["style_posts"])
+        conn.close()
+        top_posts = []
+        for p in raw_posts:
+            views = p.get("views", 0)
+            eng = p.get("likes", 0) + p.get("replies", 0) + p.get("reposts", 0) + p.get("quotes", 0)
+            rate = round(eng / views * 100, 1) if views > 0 else 0
+            top_posts.append({"full_text": p.get("full_text", ""), "engagement_rate": rate})
+        if len(top_posts) < plan_cfg["style_posts"]:
+            print(f"⚠ top posts 僅 {len(top_posts)} 篇（預期 {plan_cfg['style_posts']}）", file=_sys.stderr)
+
+    # 決定 interactive vs auto
+    is_tty = _sys.stdin.isatty()
+    chosen_fw: int | str | None = None
+    auto = args.auto
+    if framework_arg is None and not auto:
+        if not is_tty:
+            print("⚠ stdin 非 tty，自動等同 --auto", file=_sys.stderr)
+            auto = True
+        else:
+            chosen_fw = _interactive_pick_framework(topic=topic, frameworks_md=fw_md)
+            if chosen_fw is None:
+                print("✗ 已取消", file=_sys.stderr)
+                return 2
+
+    # 生骨架
+    try:
+        plan_md, used = planner.generate_plan(
+            topic=topic,
+            frameworks_md=fw_md,
+            top_posts=top_posts,
+            framework=framework_arg,
+            fmt=plan_cfg["format"],
+            stage2_model=plan_cfg["stage2_model"],
+            auto=auto,
+            chosen_framework=chosen_fw,
+        )
+    except planner.PlannerError as e:
+        msg = str(e)
+        print(f"✗ {msg}", file=_sys.stderr)
+        if "JSON" in msg or "解析" in msg or "超時" in msg or "claude" in msg:
+            return 3
+        return 1
+
+    # 寫檔
+    slug = planner.slugify(topic)
+    drafts_dir = Path(DRAFTS_DIR)
+    drafts_dir.mkdir(parents=True, exist_ok=True)
+    out_path = drafts_dir / f"{slug}.plan.md"
+
+    if out_path.exists():
+        if args.no_overwrite:
+            print(f"✗ 檔案已存在：{out_path}（--no-overwrite）", file=_sys.stderr)
+            return 4
+        if not args.overwrite and is_tty:
+            ans = input(f"覆寫 {out_path}？ [y/N] ").strip().lower()
+            if ans != "y":
+                print("✗ 已取消（檔案未改變）", file=_sys.stderr)
+                return 2
+
+    out_path.write_text(plan_md, encoding="utf-8")
+    print(f"✓ plan.md 已寫入：{out_path}（框架 {used:02d}）", file=_sys.stderr)
+    print(str(out_path))  # stdout: path for agent consumption
+    return 0
+
+
+def _interactive_pick_framework(topic: str, frameworks_md: str) -> int | str | None:
+    """互動詢問使用者選框架。回傳框架 id 或 None（取消）。"""
+    from threads_pipeline import planner
+    import sys as _sys
+
+    print("正在分析題目適合的結構（claude -p haiku）...", file=_sys.stderr)
+    try:
+        suggestions = planner.suggest_frameworks(topic=topic, frameworks_md=frameworks_md)
+    except planner.PlannerError as e:
+        print(f"✗ Stage 1 失敗：{e}", file=_sys.stderr)
+        return None
+
+    all_frameworks = planner.list_frameworks(frameworks_md)
+    fw_by_id = {fw["id"]: fw for fw in all_frameworks}
+
+    while True:
+        print("\nLLM 建議 3 個候選框架：\n", file=_sys.stderr)
+        for s in suggestions:
+            star = " ★推薦" if s["rank"] == 1 else ""
+            fw = fw_by_id.get(s["framework"], {})
+            formula = fw.get("formula", "")
+            print(f"  [{s['rank']}] {s['framework']:02d} {s['name']}{star}", file=_sys.stderr)
+            if formula:
+                print(f"      公式：{formula}", file=_sys.stderr)
+            print(f"      為什麼：{s['reason']}", file=_sys.stderr)
+            print("", file=_sys.stderr)
+
+        ans = input("請選擇 [1/2/3 / a=全部列出 / q=取消]: ").strip().lower()
+
+        if ans == "q":
+            return None
+        if ans == "a":
+            print("\n全部 16+1 框架：\n", file=_sys.stderr)
+            for fw in all_frameworks:
+                print(f"  {fw['id']:02d} {fw['name']} — {fw['when_to_use']}", file=_sys.stderr)
+                print(f"      公式：{fw['formula']}", file=_sys.stderr)
+            print("", file=_sys.stderr)
+            continue
+        if ans in {"1", "2", "3"}:
+            idx = int(ans) - 1
+            if idx < len(suggestions):
+                return suggestions[idx]["framework"]
+        print(f"⚠ 無效輸入：{ans}", file=_sys.stderr)
+
+
+def _cmd_list_frameworks(args) -> int:
+    """list-frameworks 子指令。"""
+    from threads_pipeline import planner
+    import sys as _sys
+
+    fw_md = Path(FRAMEWORKS_MD_PATH).read_text(encoding="utf-8")
+    frameworks = planner.list_frameworks(fw_md)
+    if args.json:
+        import json as _json
+        print(_json.dumps(frameworks, ensure_ascii=False, indent=2))
+    else:
+        for fw in frameworks:
+            print(f"{fw['id']:02d} {fw['name']}")
+            print(f"   公式：{fw['formula']}")
+            print(f"   適用：{fw['when_to_use']}")
+            print()
+    return 0
 
 
 if __name__ == "__main__":

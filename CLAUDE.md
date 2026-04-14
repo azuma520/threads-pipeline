@@ -32,6 +32,15 @@ PYTHONUTF8=1 python -m threads_pipeline.advisor analyze
 # Run advisor review (from parent directory 桌面/)
 $env:PYTHONUTF8=1; python -m threads_pipeline.advisor review drafts/my-post.txt
 $env:PYTHONUTF8=1; python -m threads_pipeline.advisor review --text "草稿文字"
+
+# Run advisor plan (from parent directory 桌面/)
+$env:PYTHONUTF8=1; python -m threads_pipeline.advisor plan "我學 Claude Code 一個月的心得"
+$env:PYTHONUTF8=1; python -m threads_pipeline.advisor plan "題目" --framework 11 --auto --overwrite
+$env:PYTHONUTF8=1; python -m threads_pipeline.advisor plan "題目" --suggest-only --json
+$env:PYTHONUTF8=1; python -m threads_pipeline.advisor list-frameworks
+
+# Layer 3 品質 eval (成本高，人工 release gate)
+$env:PYTHONUTF8=1; python -m pytest threads_pipeline/tests/evals/ --run-llm-evals
 ```
 
 ## Project Structure
@@ -46,6 +55,7 @@ threads_pipeline/
 ├── insights_tracker.py           # SQLite insights 追蹤
 ├── db_helpers.py                 # 共用 DB 連線與查詢
 ├── advisor.py                    # 發文顧問（analyze + review via Codex CLI）
+├── planner.py                    # advisor plan 串文骨架生成器（haiku+sonnet 兩階段）
 ├── report.py                     # Jinja2 報告渲染 + 存檔
 ├── references/
 │   └── copywriting-frameworks.md # 16+1 爆款文案結構框架
@@ -57,7 +67,8 @@ threads_pipeline/
 │   ├── conftest.py
 │   ├── test_analyzer.py
 │   ├── test_threads_client.py
-│   └── test_report.py
+│   ├── test_report.py
+│   └── evals/                    # LLM-as-judge 品質評分（Layer 3 release gate）
 ├── scripts/
 │   ├── api_explorer.py           # API 功能邊界探索腳本
 │   └── demo_publish_reply.py     # 發文/回覆 Demo（App Review 用）

@@ -1,0 +1,17 @@
+[
+  {
+    "topic": "我學 Claude Code 一個月的心得",
+    "category": "experience_share",
+    "expected_framework_candidates": [11, 14, 3]
+  },
+  {
+    "topic": "給新手的 AI 工具入門指南",
+    "category": "teaching",
+    "expected_framework_candidates": [16, 5, 8]
+  },
+  {
+    "topic": "為什麼我覺得多數 AI 課程在浪費錢",
+    "category": "opinion",
+    "expected_framework_candidates": [1, 7, 12]
+  }
+]
