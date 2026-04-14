@@ -18,6 +18,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# 個人參考資料（課程簡報、草稿、暫存）
+.reference/
+
 # 報告產出
 output/threads_reports/
 
