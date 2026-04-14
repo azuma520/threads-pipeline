@@ -197,7 +197,7 @@ class TestCallClaude:
             assert "haiku" in cmd
             assert kwargs.get("input") is None  # NOT stdin
             assert kwargs["encoding"] == "utf-8"
-            assert kwargs["timeout"] == 60
+            assert kwargs["timeout"] == 120
 
     def test_nonzero_exit_raises(self):
         from threads_pipeline.planner import _call_claude, PlannerError
@@ -215,23 +215,16 @@ class TestCallClaude:
                 _call_claude("p", model="haiku")
             assert mock_run.call_count == 2  # 1 次 + 1 次 retry
 
-    def test_windows_uses_shell(self):
+    def test_no_shell_kwarg_on_any_platform(self):
+        """claude 是真 executable，shell=True 會在 Windows 截斷多行 prompt；不帶 shell kwarg 最乾淨。"""
         from threads_pipeline.planner import _call_claude
-        with patch("threads_pipeline.planner.platform.system", return_value="Windows"):
-            with patch("threads_pipeline.planner.subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
-                _call_claude("p", model="haiku")
-                _, kwargs = mock_run.call_args
-                assert kwargs["shell"] is True
+        with patch("threads_pipeline.planner.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
+            _call_claude("p", model="haiku")
+            _, kwargs = mock_run.call_args
+            # shell kwarg 完全不傳（預設 False），讓 subprocess 直接找 claude.exe
+            assert "shell" not in kwargs
 
-    def test_non_windows_no_shell(self):
-        from threads_pipeline.planner import _call_claude
-        with patch("threads_pipeline.planner.platform.system", return_value="Linux"):
-            with patch("threads_pipeline.planner.subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
-                _call_claude("p", model="haiku")
-                _, kwargs = mock_run.call_args
-                assert kwargs["shell"] is False
 
 
 class TestGeneratePlan:
