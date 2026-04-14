@@ -123,3 +123,55 @@ class TestParseSuggestionsJson:
         stdout = '```json\n{"suggestions": [{"framework": 11, "name": "A", "reason": "r"}]}\n```'
         result = parse_suggestions_json(stdout)
         assert result[0]["framework"] == 11
+
+
+class TestPromptBuilders:
+    def test_stage1_includes_full_frameworks_md(self):
+        from threads_pipeline.planner import build_stage1_prompt
+        fws_md = "## 結構總覽 ..."
+        topic = "我的題目"
+        prompt = build_stage1_prompt(topic=topic, frameworks_md=fws_md)
+        assert fws_md in prompt
+        assert topic in prompt
+        assert "JSON" in prompt
+        assert "suggestions" in prompt
+
+    def test_stage2_includes_framework_and_style(self):
+        from threads_pipeline.planner import build_stage2_prompt
+        prompt = build_stage2_prompt(
+            topic="題目",
+            framework_section="編號：11\n名稱：逆襲引流",
+            style_posts=[{"full_text": "貼文一", "engagement_rate": 3.5}],
+            fmt="thread",
+        )
+        assert "題目" in prompt
+        assert "逆襲引流" in prompt
+        assert "貼文一" in prompt
+        assert "thread" in prompt
+        assert "3500" in prompt  # total length cap
+        assert "目標受眾" in prompt  # required section
+
+    def test_stage2_single_format(self):
+        from threads_pipeline.planner import build_stage2_prompt
+        prompt = build_stage2_prompt(
+            topic="t", framework_section="fs", style_posts=[], fmt="single"
+        )
+        assert "single" in prompt
+        assert "500 字" in prompt
+
+    def test_stage2_no_style_posts_removes_section(self):
+        """0 篇風格範本 → prompt 中完整移除「風格範本」段落，不留空標題。"""
+        from threads_pipeline.planner import build_stage2_prompt
+        prompt = build_stage2_prompt(
+            topic="t", framework_section="fs", style_posts=[], fmt="thread"
+        )
+        assert "風格範本" not in prompt
+
+    def test_stage2_with_style_posts_includes_section(self):
+        from threads_pipeline.planner import build_stage2_prompt
+        prompt = build_stage2_prompt(
+            topic="t", framework_section="fs",
+            style_posts=[{"full_text": "貼文A", "engagement_rate": 4.1}], fmt="thread"
+        )
+        assert "## 風格範本" in prompt
+        assert "貼文A" in prompt

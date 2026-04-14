@@ -103,3 +103,94 @@ def parse_suggestions_json(stdout: str) -> list[dict]:
             "rank": i,
         })
     return out
+
+
+_STAGE1_TEMPLATE = """你是 Threads 內容結構顧問。以下是 16+1 個文案框架：
+
+{frameworks_md}
+
+使用者題目：{topic}
+
+請挑出最適合這個題目的 3 個框架，依匹配度排序。
+輸出純 JSON（不要 markdown code fence）：
+
+{{
+  "suggestions": [
+    {{"framework": 11, "name": "逆襲引流", "reason": "一句話理由"}}
+  ]
+}}
+"""
+
+
+def build_stage1_prompt(topic: str, frameworks_md: str) -> str:
+    return _STAGE1_TEMPLATE.format(frameworks_md=frameworks_md, topic=topic)
+
+
+_STAGE2_HEADER = """你是 Threads 串文結構專家。任務：把題目套用指定框架，產出可直接填內容的骨架。
+
+## 題目
+{topic}
+
+## 指定框架
+{framework_section}
+"""
+
+_STAGE2_STYLE_SECTION = """
+## 風格範本（使用者過去高互動貼文，模仿語氣與句型，不要抄內容）
+{style_posts_rendered}
+"""
+
+_STAGE2_OUTPUT_SPEC = """
+## 輸出格式要求
+- Format: {fmt}
+- Thread: 7-10 條，每條 300-500 字；主貼定調、後續遞進
+- Single: 1 條 ≤500 字，壓縮完整結構
+- **整份 plan.md 總長 ≤3500 字元**（含所有章節；超過請壓縮「內容方向」）
+
+## 輸出 Markdown 結構（照這個格式輸出；關鍵章節必須前置）
+
+# {{題目}}
+
+- 框架：{{編號}} {{名稱}}
+- 格式：{fmt}
+- 預估總字數：{{數字}}
+
+## 目標受眾
+- 誰會想讀：1-2 句具體描述
+- 痛點 / 動機：他們為什麼點進來
+
+## 骨架
+
+### 主貼（P1）
+- 【鉤子類型】：
+- 【字數建議】：
+- 【內容方向】：2-3 句指引，**不是成稿**
+- 【情緒】：
+
+### P2
+...
+
+## 互動設計
+- 結尾 CTA 類型（互動式/夥伴式/Slogan/反轉式）：
+- 可加的互動元素：
+
+## 風險提示
+LLM 自評骨架可能的弱點 1-2 點。
+"""
+
+
+def build_stage2_prompt(
+    topic: str,
+    framework_section: str,
+    style_posts: list[dict],
+    fmt: str,
+) -> str:
+    parts = [_STAGE2_HEADER.format(topic=topic, framework_section=framework_section)]
+    if style_posts:
+        rendered = []
+        for i, p in enumerate(style_posts, start=1):
+            rate = p.get("engagement_rate", 0)
+            rendered.append(f"[第 {i} 篇] 互動率 {rate}%\n{p.get('full_text', '')}\n---")
+        parts.append(_STAGE2_STYLE_SECTION.format(style_posts_rendered="\n".join(rendered)))
+    parts.append(_STAGE2_OUTPUT_SPEC.format(fmt=fmt))
+    return "".join(parts)
