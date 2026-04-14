@@ -287,6 +287,8 @@ def generate_plan(
             raise PlannerError("需要互動選擇，但 auto=False；CLI 層應先呼叫 suggest_frameworks")
         pick = suggestions[0]["framework"]
         section = extract_framework_section(frameworks_md, pick)
+        if section is None:
+            raise PlannerError(f"LLM 建議的框架 {pick} 在 frameworks_md 中不存在")
         used = pick
 
     # Stage 2

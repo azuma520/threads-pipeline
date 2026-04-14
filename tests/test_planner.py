@@ -307,3 +307,14 @@ class TestGeneratePlan:
             assert out[0]["framework"] == 11
             assert out[0]["rank"] == 1
             assert mock_call.call_count == 1
+
+    def test_auto_hallucinated_framework_id_raises(self, frameworks_md):
+        """LLM 回傳 frameworks_md 中不存在的 id 時，應 raise PlannerError 而非 TypeError。"""
+        from threads_pipeline.planner import generate_plan, PlannerError
+        with patch("threads_pipeline.planner._call_claude") as mock_call:
+            mock_call.return_value = '{"suggestions": [{"framework": 999, "name": "幻想", "reason": "x"}]}'
+            with pytest.raises(PlannerError, match="999|不存在"):
+                generate_plan(
+                    topic="題目", frameworks_md=frameworks_md, top_posts=[],
+                    framework=None, fmt="thread", stage2_model="sonnet", auto=True,
+                )
