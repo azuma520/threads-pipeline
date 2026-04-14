@@ -232,3 +232,78 @@ class TestCallClaude:
                 _call_claude("p", model="haiku")
                 _, kwargs = mock_run.call_args
                 assert kwargs["shell"] is False
+
+
+class TestGeneratePlan:
+    @pytest.fixture
+    def frameworks_md(self):
+        return (
+            "## 結構總覽\n"
+            "| # | 名稱 | 公式 | 適用場景 |\n"
+            "|---|------|-----|---------|\n"
+            "| 11 | 逆襲引流 | 積極結果 → 獲得感 | 分享成功經驗 |\n"
+            "| 15 | 通用類 | 鉤子開頭 → 結尾 | 萬用結構 |\n"
+        )
+
+    def test_full_flow_with_framework_forced(self, frameworks_md):
+        """給 --framework 時跳過 Stage 1，只呼叫 Stage 2。"""
+        from threads_pipeline.planner import generate_plan
+        with patch("threads_pipeline.planner._call_claude") as mock_call:
+            mock_call.return_value = "# 題目\n- 框架：11 逆襲引流\n骨架內容"
+            plan_md, framework_used = generate_plan(
+                topic="題目",
+                frameworks_md=frameworks_md,
+                top_posts=[{"full_text": "貼文A", "engagement_rate": 3.0}],
+                framework=11,
+                fmt="thread",
+                stage2_model="sonnet",
+            )
+            assert "骨架內容" in plan_md
+            assert framework_used == 11
+            assert mock_call.call_count == 1
+            _, kwargs = mock_call.call_args
+            assert kwargs["model"] == "sonnet"
+
+    def test_full_flow_auto_picks_first_suggestion(self, frameworks_md):
+        """無 framework 時 Stage 1 挑 + 用 auto 模式取第一個建議。"""
+        from threads_pipeline.planner import generate_plan
+        with patch("threads_pipeline.planner._call_claude") as mock_call:
+            mock_call.side_effect = [
+                '{"suggestions": [{"framework": 11, "name": "逆襲引流", "reason": "好"}]}',
+                "# 題目\n骨架",
+            ]
+            plan_md, framework_used = generate_plan(
+                topic="題目", frameworks_md=frameworks_md, top_posts=[],
+                framework=None, fmt="thread", stage2_model="sonnet",
+                auto=True,
+            )
+            assert framework_used == 11
+            assert mock_call.call_count == 2
+
+    def test_stage1_json_fail_raises(self, frameworks_md):
+        from threads_pipeline.planner import generate_plan, PlannerError
+        with patch("threads_pipeline.planner._call_claude") as mock_call:
+            mock_call.return_value = "not json"
+            with pytest.raises(PlannerError, match="JSON"):
+                generate_plan(
+                    topic="題目", frameworks_md=frameworks_md, top_posts=[],
+                    framework=None, fmt="thread", stage2_model="sonnet", auto=True,
+                )
+
+    def test_unknown_framework_raises(self, frameworks_md):
+        from threads_pipeline.planner import generate_plan, PlannerError
+        with pytest.raises(PlannerError, match="框架"):
+            generate_plan(
+                topic="題目", frameworks_md=frameworks_md, top_posts=[],
+                framework=99, fmt="thread", stage2_model="sonnet",
+            )
+
+    def test_suggest_only_returns_suggestions(self, frameworks_md):
+        """`--suggest-only` 模式：只跑 Stage 1，回傳 suggestions list，不生 plan。"""
+        from threads_pipeline.planner import suggest_frameworks
+        with patch("threads_pipeline.planner._call_claude") as mock_call:
+            mock_call.return_value = '{"suggestions": [{"framework": 11, "name": "逆襲引流", "reason": "好"}]}'
+            out = suggest_frameworks(topic="題目", frameworks_md=frameworks_md)
+            assert out[0]["framework"] == 11
+            assert out[0]["rank"] == 1
+            assert mock_call.call_count == 1

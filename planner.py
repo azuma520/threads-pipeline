@@ -236,3 +236,70 @@ def _call_claude(prompt: str, model: str) -> str:
             logger.warning("claude -p 超時 (attempt %d/2)", attempt + 1)
             continue
     raise PlannerError(f"claude -p 超時 {_CLAUDE_TIMEOUT_SEC}s x2 retries") from last_err
+
+
+_STAGE1_MODEL = "haiku"
+
+
+def suggest_frameworks(topic: str, frameworks_md: str) -> list[dict]:
+    """只跑 Stage 1：回傳 LLM 建議的框架清單。"""
+    prompt = build_stage1_prompt(topic=topic, frameworks_md=frameworks_md)
+    stdout = _call_claude(prompt, model=_STAGE1_MODEL)
+    return parse_suggestions_json(stdout)
+
+
+def generate_plan(
+    topic: str,
+    frameworks_md: str,
+    top_posts: list[dict],
+    framework: int | str | None,
+    fmt: str,
+    stage2_model: str,
+    auto: bool = False,
+    chosen_framework: int | str | None = None,
+) -> tuple[str, int]:
+    """產生 plan.md。
+
+    Args:
+        framework: 若指定，跳過 Stage 1 直接用此框架
+        auto: 無 framework 時若 True，取 Stage 1 第一建議；若 False 則 raise（讓 CLI 層做互動）
+        chosen_framework: CLI 互動選擇後傳入的框架（覆寫 Stage 1 第一建議）
+
+    Returns:
+        (plan_markdown, used_framework_id)
+    """
+    # 決定最終用哪個框架
+    if framework is not None:
+        section = extract_framework_section(frameworks_md, framework)
+        if section is None:
+            raise PlannerError(f"未知框架：{framework}")
+        used = _resolve_id(frameworks_md, framework)
+    elif chosen_framework is not None:
+        section = extract_framework_section(frameworks_md, chosen_framework)
+        if section is None:
+            raise PlannerError(f"未知框架：{chosen_framework}")
+        used = _resolve_id(frameworks_md, chosen_framework)
+    else:
+        suggestions = suggest_frameworks(topic, frameworks_md)
+        if not suggestions:
+            raise PlannerError("LLM 未回傳任何框架建議")
+        if not auto:
+            raise PlannerError("需要互動選擇，但 auto=False；CLI 層應先呼叫 suggest_frameworks")
+        pick = suggestions[0]["framework"]
+        section = extract_framework_section(frameworks_md, pick)
+        used = pick
+
+    # Stage 2
+    prompt = build_stage2_prompt(
+        topic=topic, framework_section=section, style_posts=top_posts, fmt=fmt,
+    )
+    plan_md = _call_claude(prompt, model=stage2_model)
+    return plan_md, used
+
+
+def _resolve_id(frameworks_md: str, key: int | str) -> int:
+    """解析框架 ID：如果是 int 就直接返回，如果是 str 就查表解析成 ID。"""
+    for fw in list_frameworks(frameworks_md):
+        if (isinstance(key, int) and fw["id"] == key) or (isinstance(key, str) and fw["name"] == key):
+            return fw["id"]
+    raise PlannerError(f"無法解析框架 id：{key}")
