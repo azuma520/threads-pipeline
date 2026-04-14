@@ -9,8 +9,10 @@ app-review-docs/
 # Playwright
 .playwright-mcp/
 
-# Claude
-.claude/
+# Claude（保留 skills 和 agents，其他如 settings/hooks 不進 repo）
+.claude/*
+!.claude/skills/
+!.claude/agents/
 .claude_review_state.json
 
 # Python
