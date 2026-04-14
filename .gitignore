@@ -23,4 +23,6 @@ output/threads_reports/
 
 # Advisor
 drafts/
+drafts/*.plan.md
+drafts/*.review.md
 output/advisor/

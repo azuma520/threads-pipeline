@@ -133,3 +133,10 @@ class TestReviewDraft:
         mock_run.return_value = MagicMock(returncode=1, stderr="error")
         result = review_draft("草稿", analysis_json={})
         assert "審查失敗" in result
+
+
+def test_review_prompt_plan_truncation_is_4000():
+    long_plan = "P" * 5000
+    prompt = _build_review_prompt(draft="draft", analysis_json={}, plan_content=long_plan)
+    assert "P" * 4000 in prompt
+    assert "P" * 4001 not in prompt

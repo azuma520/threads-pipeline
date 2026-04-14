@@ -199,7 +199,7 @@ def _build_review_prompt(
     analysis_summary = json.dumps(analysis_json, ensure_ascii=False, indent=2) if analysis_json else "（無數據）"
 
     if plan_content:
-        plan_section = f"## 發文規劃\n{plan_content[:2000]}"
+        plan_section = f"## 發文規劃\n{plan_content[:4000]}"
         audience_note = "（參考發文規劃中的受眾設定）"
         structure_note = "（參考發文規劃中的建議結構）"
     else:
