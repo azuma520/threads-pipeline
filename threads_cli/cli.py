@@ -245,6 +245,13 @@ def cmd_reply(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     """CLI 入口。"""
+    # 載入 .env（與 advisor / main 的 _load_dotenv 一致）
+    try:
+        from threads_pipeline.main import _load_dotenv
+        _load_dotenv()
+    except Exception:
+        pass  # .env 載入失敗不擋 CLI（可能用外部 env）
+
     parser = _build_parser()
     args = parser.parse_args(argv)
 
