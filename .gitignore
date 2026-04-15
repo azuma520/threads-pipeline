@@ -17,6 +17,9 @@ app-review-docs/
 __pycache__/
 *.pyc
 .pytest_cache/
+*.egg-info/
+build/
+dist/
 
 # 報告產出
 output/threads_reports/
