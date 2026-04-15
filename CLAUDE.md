@@ -8,30 +8,43 @@ A daily pipeline that collects AI/tech trend posts from Meta Threads API, analyz
 
 ## Commands
 
+### 新版 CLI（推薦）
+
 ```bash
-# Run the pipeline (from parent directory 桌面/)
+# 一次性安裝（開發模式）
+pip install -e ".[dev]"
+
+# Advisor
+threads-advisor analyze
+threads-advisor review drafts/x.txt
+threads-advisor review --text "草稿文字"
+
+# Threads API 操作（寫入指令預設 dry-run）
+threads post publish "測試文字"                       # dry-run
+threads post publish "測試文字" --confirm --yes       # 真發（Agent 模式）
+threads reply <post_id> "回覆內容" --confirm --yes
+threads post publish-chain drafts/smoke-test.txt --confirm --yes
+
+# 每日 pipeline（不 CLI 化）
 $env:PYTHONUTF8=1; python -m threads_pipeline.main   # PowerShell
 PYTHONUTF8=1 python -m threads_pipeline.main          # bash
+```
 
-# Run all tests (from project root)
-python -m pytest
+### 舊版（相容性保留）
 
-# Run a single test file
-python -m pytest tests/test_analyzer.py
-
-# Run a specific test class or method
-python -m pytest tests/test_analyzer.py::TestParseAnalysis::test_valid_json
-
-# Run API exploration tests
-python3 scripts/api_explorer.py
-
-# Run advisor analyze (from parent directory 桌面/)
+```bash
 $env:PYTHONUTF8=1; python -m threads_pipeline.advisor analyze
-PYTHONUTF8=1 python -m threads_pipeline.advisor analyze
-
-# Run advisor review (from parent directory 桌面/)
 $env:PYTHONUTF8=1; python -m threads_pipeline.advisor review drafts/my-post.txt
 $env:PYTHONUTF8=1; python -m threads_pipeline.advisor review --text "草稿文字"
+```
+
+### 測試
+
+```bash
+python -m pytest
+python -m pytest tests/test_analyzer.py
+python -m pytest tests/test_threads_cli.py
+python3 scripts/api_explorer.py
 ```
 
 ## Project Structure
