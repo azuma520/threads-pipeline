@@ -26,13 +26,15 @@
 - `threads-advisor plan / review / analyze / list-frameworks` — 現有 advisor
 - `threads posts search / list` — 唯讀搜尋
 - `threads post insights / replies / publish` — 單篇操作
+- `threads post publish-chain` — **串文發文**（重用 publish + reply 組合）
 - `threads reply` — 回覆
 - `threads account info / insights` — 帳號資訊
 
 ### 刻意排除
 
-- 串文（thread chain）發文
-- 從 plan 結果直接發文
+- 從 advisor plan 結構化資料直接吃（需解析 advisor 輸出格式，屬 E-重）
+- 串文自動重試 / 回滾（半途失敗採中斷回報策略，使用者手動處理）
+- 發文節流（避免被判 spam，屬 E-重）
 - 排程、模板、自動審查、自動紀錄
 - 以上屬於 E-重，Level 1 不做。未來可在現有分層架構上擴充。
 
@@ -167,7 +169,51 @@ python_files = ["test_*.py"]
 | 指令 | Threads API | 實作依據 |
 |---|---|---|
 | `threads post publish "文字"` | `/me/threads` → `/me/threads_publish` | `demo_publish_reply.py` step 1–2 |
+| `threads post publish-chain FILE` | `publish` + `reply`×N 組合 | 重用 publisher 函式 |
 | `threads reply <post_id> "內容"` | `/{post_id}/reply` | `demo_publish_reply.py` step 4 |
+
+### `publish-chain` 細節設計
+
+**輸入格式**：每行一則的純文字檔（用 `-` 讀 stdin）
+
+```
+# drafts/my-thread.txt
+第一則：開頭 hook
+第二則：主要內容
+第三則：收尾 CTA
+```
+
+**執行流程**：
+```
+第 1 則用 publish → 拿到 first_post_id
+第 2 則用 reply 到 first_post_id → 拿到 reply_id_2
+第 3 則用 reply 到 reply_id_2 → 拿到 reply_id_3
+...（階梯式串）
+```
+
+**半途失敗策略**：**中斷並回報**（策略 A）
+- 已發的不刪
+- 印出「已發 post_id 清單」+「失敗那則的錯誤訊息」
+- exit 1
+- 使用者自行決定：(a) 手動刪除已發、(b) 手動補發剩餘、(c) 忽略
+
+**為什麼不自動重試 / 回滾**：需要狀態管理 + 錯誤恢復邏輯，屬 E-重範圍。
+
+**dry-run 輸出範例**：
+```
+[DRY RUN] Would publish chain of 3 posts to @azuma520:
+─────────────────────────────────
+1/3 (opener):   第一則：開頭 hook（14 chars）
+2/3 (reply):    第二則：主要內容（16 chars）
+3/3 (reply):    第三則：收尾 CTA（13 chars）
+─────────────────────────────────
+Total: 3 posts, 43 chars
+Account: azuma520 (ID: ...)
+
+Add --confirm to actually publish.
+```
+
+**字數限制檢查**：發送前每則都檢查是否超過 500 字元，任一則超過就**拒絕整串**（全有或全無，比半途失敗乾淨）。
 
 #### 系統輔助
 
@@ -302,13 +348,14 @@ Level 1 完成後執行一次：
 ③ 驗證既有 pytest 通過
 ④ 建立 threads_cli/ 骨架（空實作）
 ⑤ 寫 argparse 解析測試（TDD）
-⑥ 實作 cli.py 子命令註冊
-⑦ 從 demo_publish_reply.py 抽出 publisher 函式
-⑧ 寫 dry-run / confirm / --yes 測試
-⑨ 實作安全層，讓測試通過
-⑩ 手動 smoke test（實發一則、刪除）
-⑪ 更新 CLAUDE.md
-⑫ commit + 準備 merge
+⑥ 實作 cli.py 子命令註冊（含 publish-chain）
+⑦ 從 demo_publish_reply.py 抽出 publisher.publish_text / reply_to
+⑧ 實作 publisher.publish_chain（組合 publish_text + reply_to）
+⑨ 寫 dry-run / confirm / --yes 測試（單則 + 串文）
+⑩ 實作安全層，讓測試通過
+⑪ 手動 smoke test（實發一則 + 3 則串文、刪除）
+⑫ 更新 CLAUDE.md
+⑬ commit + 準備 merge
 ```
 
 批次 B（list / insights / replies / account）Level 1 批次 A merge 後再開新 session 做。
@@ -354,6 +401,8 @@ git commit -am "WIP" && # 未來接續
 - [ ] `threads-advisor list-frameworks` 輸出與 `python -m threads_pipeline.advisor list-frameworks` 相同
 - [ ] `threads post publish "x"`（無 `--confirm`）絕對不發文
 - [ ] `threads post publish "..." --confirm --yes` 實發一則測試文並成功（手動驗證）
+- [ ] `threads post publish-chain FILE --confirm --yes` 實發 3 則串文並手動刪除（手動驗證）
+- [ ] publish-chain 半途失敗時會「中斷並回報已發 ID」（可 mock 測試）
 - [ ] Token 缺失時 exit 1 且有清楚錯誤訊息
 - [ ] CLAUDE.md Commands 區塊已更新為雙軌並列
 - [ ] `threads_cli/SKILL.md` 最小版已寫（Agent 可讀）
@@ -369,8 +418,9 @@ git commit -am "WIP" && # 未來接續
 - 實作批次 B 指令（list / insights / replies / account）
 
 ### 中期（E-重）
-- 串文發文
-- 從 plan 結果直接發文
+- 從 advisor plan 結構化資料直接發串文（接管 plan 輸出）
+- 串文自動重試 / 回滾
+- 發文節流（每則間隔 N 秒，避免被判 spam）
 - 排程、模板、發前自動 review、發後自動紀錄
 
 ### 遠期（加入 Hub）
