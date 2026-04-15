@@ -88,3 +88,48 @@ def test_cli_reply_confirm_yes_calls_api():
     mock_rep.assert_called_once()
     assert mock_rep.call_args.args[0] == "POST_123"
     assert mock_rep.call_args.args[1] == "回覆"
+
+
+def test_cli_publish_chain_reads_file(tmp_path):
+    """從檔案讀多行，dry-run 印出清單。"""
+    from threads_pipeline.threads_cli.cli import main
+
+    chain_file = tmp_path / "chain.txt"
+    chain_file.write_text("第一則\n第二則\n第三則\n", encoding="utf-8")
+
+    with patch("threads_pipeline.threads_cli.cli.publish_chain") as mock_chain, \
+         patch("threads_pipeline.threads_cli.cli.require_token", return_value="fake"):
+        rc = main(["post", "publish-chain", str(chain_file)])
+
+    assert rc == 0
+    assert mock_chain.call_count == 0  # dry-run 不呼叫
+
+
+def test_cli_publish_chain_confirm_yes_calls_api(tmp_path):
+    """--confirm --yes 應呼叫 publish_chain。"""
+    from threads_pipeline.threads_cli.cli import main
+
+    chain_file = tmp_path / "chain.txt"
+    chain_file.write_text("a\nb\nc\n", encoding="utf-8")
+
+    with patch("threads_pipeline.threads_cli.cli.publish_chain", return_value=["1", "2", "3"]) as mock_chain, \
+         patch("threads_pipeline.threads_cli.cli.require_token", return_value="fake"):
+        rc = main(["post", "publish-chain", str(chain_file), "--confirm", "--yes"])
+
+    assert rc == 0
+    mock_chain.assert_called_once()
+    assert mock_chain.call_args.args[0] == ["a", "b", "c"]
+
+
+def test_cli_publish_chain_on_failure_not_stop_exit_2(tmp_path):
+    """--on-failure=retry 應因 NotImplementedError 而 exit 2。"""
+    from threads_pipeline.threads_cli.cli import main
+
+    chain_file = tmp_path / "chain.txt"
+    chain_file.write_text("a\n", encoding="utf-8")
+
+    with patch("threads_pipeline.threads_cli.cli.require_token", return_value="fake"):
+        with pytest.raises(SystemExit) as exc_info:
+            main(["post", "publish-chain", str(chain_file),
+                  "--confirm", "--yes", "--on-failure", "retry"])
+    assert exc_info.value.code == 2
