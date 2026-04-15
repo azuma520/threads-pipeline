@@ -122,3 +122,94 @@ def reply_to(
     if not parent_post_id:
         raise PublishError("reply_to requires non-empty post_id")
     return publish_text(text, token=token, reply_to_id=parent_post_id)
+
+
+MAX_POST_LENGTH = 500  # Threads 平台單則字數上限
+
+
+class ChainMidwayError(PublishError):
+    """串文半途失敗的 exception，攜帶已發 ID 與失敗位置。
+
+    注意：ChainMidwayError IS-A PublishError。
+    CLI 層 catch 時務必 subclass 在前、parent 在後，否則 ChainMidwayError
+    會被 PublishError branch 吞掉而失去 posted_ids 資訊。
+    """
+
+    def __init__(
+        self,
+        posted_ids: list[str],
+        failed_index: int,
+        cause: Exception,
+    ):
+        self.posted_ids = posted_ids
+        self.failed_index = failed_index
+        self.cause = cause
+        super().__init__(
+            f"Chain failed at post {failed_index + 1}: "
+            f"already posted IDs={posted_ids}, cause={cause}"
+        )
+
+
+def publish_chain(
+    texts: list[str],
+    *,
+    token: Optional[str] = None,
+    on_failure: str = "stop",
+) -> list[str]:
+    """發串文（階梯式 reply 串連），回傳所有 post ID（含 opener）。
+
+    Args:
+        texts: 每則一項的字串 list
+        token: Threads access token
+        on_failure: 半途失敗策略；目前只實作 "stop"；retry / rollback 保留 flag
+            但 raise NotImplementedError
+
+    Returns:
+        post_ids list，依序對應 texts
+
+    Raises:
+        PublishError: 預檢查失敗（空清單、任一則超 500 字）
+                     或 opener（第 1 則）失敗（不是 midway）
+        ChainMidwayError: opener 之後中途 API 失敗，帶已發 IDs
+        NotImplementedError: on_failure=retry 或 rollback
+    """
+    if on_failure != "stop":
+        raise NotImplementedError(
+            f"on_failure={on_failure!r} not implemented in Level 1 (only 'stop')"
+        )
+
+    if not texts:
+        raise PublishError("publish_chain: texts list is empty")
+
+    # Pre-flight 字數檢查（全有或全無）
+    for i, text in enumerate(texts):
+        if len(text) > MAX_POST_LENGTH:
+            raise PublishError(
+                f"publish_chain: post {i + 1} exceeds {MAX_POST_LENGTH} chars "
+                f"({len(text)} chars)"
+            )
+
+    posted_ids: list[str] = []
+    try:
+        # 第 1 則：獨立 publish
+        first_id = publish_text(texts[0], token=token)
+        posted_ids.append(first_id)
+
+        # 後續：階梯式 reply 到前一則
+        parent_id = first_id
+        for text in texts[1:]:
+            reply_id = reply_to(parent_id, text, token=token)
+            posted_ids.append(reply_id)
+            parent_id = reply_id
+    except PublishError as e:
+        # Opener 就失敗 → 沒有 "已發"，拋 plain PublishError 讓上層處理
+        if not posted_ids:
+            raise
+        # 真 midway → 升級為 ChainMidwayError 帶 posted_ids
+        raise ChainMidwayError(
+            posted_ids=posted_ids,
+            failed_index=len(posted_ids),
+            cause=e,
+        ) from e
+
+    return posted_ids

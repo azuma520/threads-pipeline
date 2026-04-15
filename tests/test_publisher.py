@@ -101,3 +101,100 @@ def test_reply_to_requires_parent_id():
 
     with pytest.raises(PublishError, match="post_id"):
         reply_to("", "text", token="fake")
+
+
+def test_publish_chain_success_3_posts():
+    """3 則串文：第 1 則用 publish，後續 reply 到前一則（階梯式）。"""
+    from threads_pipeline.publisher import publish_chain
+
+    with patch("threads_pipeline.publisher.publish_text") as mock_pub, \
+         patch("threads_pipeline.publisher.reply_to") as mock_rep:
+        mock_pub.return_value = "POST_1"
+        mock_rep.side_effect = ["POST_2", "POST_3"]
+
+        ids = publish_chain(["第 1 則", "第 2 則", "第 3 則"], token="fake")
+
+    assert ids == ["POST_1", "POST_2", "POST_3"]
+    mock_pub.assert_called_once_with("第 1 則", token="fake")
+    # 第 2 則 reply 到 POST_1
+    assert mock_rep.call_args_list[0].args == ("POST_1", "第 2 則")
+    # 第 3 則 reply 到 POST_2（階梯式，不是都 reply 到 POST_1）
+    assert mock_rep.call_args_list[1].args == ("POST_2", "第 3 則")
+
+
+def test_publish_chain_preflight_length_all_or_nothing():
+    """任一則超過 500 字元 → 拒絕整串，零 API 呼叫。"""
+    from threads_pipeline.publisher import publish_chain, PublishError
+
+    with patch("threads_pipeline.publisher.publish_text") as mock_pub, \
+         patch("threads_pipeline.publisher.reply_to") as mock_rep:
+        with pytest.raises(PublishError, match="500"):
+            publish_chain(["ok", "x" * 501, "ok"], token="fake")
+
+    assert mock_pub.call_count == 0
+    assert mock_rep.call_count == 0
+
+
+def test_publish_chain_boundary_500_chars_ok():
+    """剛好 500 字元應可通過 pre-flight（邊界正確性）。"""
+    from threads_pipeline.publisher import publish_chain
+
+    with patch("threads_pipeline.publisher.publish_text", return_value="POST_1"):
+        result = publish_chain(["x" * 500], token="fake")
+    assert result == ["POST_1"]
+
+
+def test_publish_chain_opener_failure_raises_plain_publisherror():
+    """第 1 則就失敗 → 拋 plain PublishError，不是 ChainMidwayError。
+
+    理由：沒有 '已發' 需要回報，語義上不是 midway。
+    """
+    from threads_pipeline.publisher import publish_chain, PublishError, ChainMidwayError
+
+    with patch("threads_pipeline.publisher.publish_text", side_effect=PublishError("opener fail")):
+        with pytest.raises(PublishError) as exc_info:
+            publish_chain(["a", "b", "c"], token="fake")
+
+    # 必須是 plain PublishError，不是 ChainMidwayError
+    assert not isinstance(exc_info.value, ChainMidwayError)
+
+
+def test_publish_chain_midway_failure_reports_posted_ids():
+    """第 3 則失敗 → ChainMidwayError 含已發的 IDs。"""
+    from threads_pipeline.publisher import publish_chain, PublishError, ChainMidwayError
+
+    with patch("threads_pipeline.publisher.publish_text") as mock_pub, \
+         patch("threads_pipeline.publisher.reply_to") as mock_rep:
+        mock_pub.return_value = "POST_1"
+        mock_rep.side_effect = ["POST_2", PublishError("API 500")]
+
+        with pytest.raises(ChainMidwayError) as exc_info:
+            publish_chain(["a", "b", "c"], token="fake")
+
+    assert exc_info.value.posted_ids == ["POST_1", "POST_2"]
+    assert exc_info.value.failed_index == 2
+    assert "API 500" in str(exc_info.value.cause)
+
+
+def test_publish_chain_on_failure_retry_not_implemented():
+    """on_failure=retry 應 raise NotImplementedError。"""
+    from threads_pipeline.publisher import publish_chain
+
+    with pytest.raises(NotImplementedError, match="retry"):
+        publish_chain(["a"], token="fake", on_failure="retry")
+
+
+def test_publish_chain_on_failure_rollback_not_implemented():
+    """on_failure=rollback 應 raise NotImplementedError。"""
+    from threads_pipeline.publisher import publish_chain
+
+    with pytest.raises(NotImplementedError, match="rollback"):
+        publish_chain(["a"], token="fake", on_failure="rollback")
+
+
+def test_publish_chain_empty_list():
+    """空清單應拒絕。"""
+    from threads_pipeline.publisher import publish_chain, PublishError
+
+    with pytest.raises(PublishError, match="empty"):
+        publish_chain([], token="fake")
