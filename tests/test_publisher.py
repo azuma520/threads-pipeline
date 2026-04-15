@@ -77,3 +77,27 @@ def test_publish_text_no_token_raises():
     with patch.dict("os.environ", {}, clear=True):
         with pytest.raises(PublishError, match="TOKEN"):
             publish_text("x")
+
+
+def test_reply_to_passes_reply_to_id():
+    """reply_to 應把 post_id 傳成 reply_to_id 給 publish_text。"""
+    from threads_pipeline.publisher import reply_to
+
+    with patch("threads_pipeline.publisher.publish_text") as mock_pub:
+        mock_pub.return_value = "REPLY_POST_789"
+        result = reply_to("PARENT_POST_123", "我的回覆", token="fake")
+
+    assert result == "REPLY_POST_789"
+    mock_pub.assert_called_once_with(
+        "我的回覆",
+        token="fake",
+        reply_to_id="PARENT_POST_123",
+    )
+
+
+def test_reply_to_requires_parent_id():
+    """reply_to 不接受空 post_id。"""
+    from threads_pipeline.publisher import reply_to, PublishError
+
+    with pytest.raises(PublishError, match="post_id"):
+        reply_to("", "text", token="fake")

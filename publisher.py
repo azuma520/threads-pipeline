@@ -98,3 +98,27 @@ def publish_text(
     if not post_id:
         raise PublishError(f"Step 2 returned no post ID (container_id={container_id}): {step2}")
     return post_id
+
+
+def reply_to(
+    parent_post_id: str,
+    text: str,
+    *,
+    token: Optional[str] = None,
+) -> str:
+    """回覆既有貼文，回傳回覆的 post_id。
+
+    Args:
+        parent_post_id: 要回覆的目標 post ID
+        text: 回覆文字內容
+        token: Threads access token；None 時從環境讀
+
+    Returns:
+        回覆貼文的 post_id
+
+    Raises:
+        PublishError: parent_post_id 為空或 API 失敗
+    """
+    if not parent_post_id:
+        raise PublishError("reply_to requires non-empty post_id")
+    return publish_text(text, token=token, reply_to_id=parent_post_id)
