@@ -10,7 +10,7 @@ if sys.platform == "win32":
 
 from threads_pipeline.threads_cli import __version__
 from threads_pipeline.threads_cli.output import emit, error, warn
-from threads_pipeline.publisher import publish_text, PublishError
+from threads_pipeline.publisher import publish_text, reply_to, PublishError
 from threads_pipeline.threads_cli.safety import (
     require_token,
     validate_confirm_yes,
@@ -138,8 +138,40 @@ def cmd_post_publish_chain(args) -> int:
 
 @_register("reply")
 def cmd_reply(args) -> int:
-    """threads reply — Task 7 實作。"""
-    error("reply: not implemented yet (pending task)", exit_code=2)
+    """threads reply <post_id> <text> — 回覆既有貼文。"""
+    token = require_token()
+    is_tty = sys.stdin.isatty()
+    validate_confirm_yes(confirm=args.confirm, yes=args.yes, is_tty=is_tty)
+
+    parent_id = args.post_id
+    text = args.text
+    char_count = len(text)
+
+    if not args.confirm:
+        print(f"[DRY RUN] Would reply to post {parent_id}:")
+        print("---------------------------------")
+        print(text)
+        print("---------------------------------")
+        print(f"Character count: {char_count}")
+        print("Add --confirm to actually reply.")
+        return 0
+
+    if not args.yes:
+        print(f"About to reply to post {parent_id}:")
+        print("---------------------------------")
+        print(text)
+        print("---------------------------------")
+        if not interactive_confirm():
+            print("(cancelled)")
+            return 0
+
+    try:
+        reply_id = reply_to(parent_id, text, token=token)
+    except PublishError as e:
+        error(str(e), exit_code=1)  # SystemExit
+
+    print(f"[OK] Reply posted as {reply_id} (parent: {parent_id})")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
