@@ -10,6 +10,12 @@ if sys.platform == "win32":
 
 from threads_pipeline.threads_cli import __version__
 from threads_pipeline.threads_cli.output import emit, error, warn
+from threads_pipeline.publisher import publish_text, PublishError
+from threads_pipeline.threads_cli.safety import (
+    require_token,
+    validate_confirm_yes,
+    interactive_confirm,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -85,8 +91,43 @@ def cmd_posts_search(args) -> int:
 
 @_register("post.publish")
 def cmd_post_publish(args) -> int:
-    """threads post publish — Task 6 實作。"""
-    error("post publish: not implemented yet (pending task)", exit_code=2)
+    """threads post publish — 發單則貼文。"""
+    token = require_token()
+    is_tty = sys.stdin.isatty()
+    validate_confirm_yes(confirm=args.confirm, yes=args.yes, is_tty=is_tty)
+
+    text = args.text
+    char_count = len(text)
+
+    # Dry-run 預設
+    if not args.confirm:
+        print("[DRY RUN] Would publish:")
+        print("---------------------------------")
+        print(text)
+        print("---------------------------------")
+        print(f"Character count: {char_count}")
+        print("Add --confirm to actually publish.")
+        return 0
+
+    # 互動確認（TTY + --confirm 無 --yes）
+    if not args.yes:
+        print("About to publish:")
+        print("---------------------------------")
+        print(text)
+        print("---------------------------------")
+        print(f"Character count: {char_count}")
+        if not interactive_confirm():
+            print("(cancelled)")
+            return 0
+
+    # 真正發文
+    try:
+        post_id = publish_text(text, token=token)
+    except PublishError as e:
+        error(str(e), exit_code=1)  # raises SystemExit, no unreachable return after
+
+    print(f"[OK] Published as post {post_id}")
+    return 0
 
 
 @_register("post.publish-chain")
