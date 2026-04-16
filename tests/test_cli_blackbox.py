@@ -11,8 +11,6 @@ import os
 import subprocess
 import sys
 
-import pytest
-
 
 def run_threads(args: list[str], env_extra: dict | None = None) -> subprocess.CompletedProcess:
     """跑 `python -m threads_pipeline.threads_cli.cli ...`，捕捉 stdout/stderr。"""
