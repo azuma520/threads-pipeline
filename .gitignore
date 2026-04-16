@@ -27,3 +27,6 @@ output/threads_reports/
 # Advisor
 drafts/
 output/advisor/
+
+# 內部備忘錄（不對外；放這個目錄一律不 commit）
+docs/dev/private/
