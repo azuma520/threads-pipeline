@@ -16,8 +16,8 @@ from threads_pipeline.threads_cli.safety import (
 def reply_cmd(
     post_id: str = typer.Argument(..., help="Parent post ID"),
     text: str = typer.Argument(..., help="Reply text"),
-    confirm: bool = typer.Option(False, "--confirm"),
-    yes: bool = typer.Option(False, "--yes"),
+    confirm: bool = typer.Option(False, "--confirm", help="Actually reply (default: dry-run)"),
+    yes: bool = typer.Option(False, "--yes", help="Skip interactive confirmation (Agent mode)"),
 ):
     """Reply to an existing post."""
     token = require_token()

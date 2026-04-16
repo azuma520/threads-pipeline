@@ -108,27 +108,6 @@ def test_cli_publish_chain_on_failure_not_stop_exit_2(tmp_path):
     assert result.exit_code == 2
 
 
-# === subprocess-based tests 保留（Typer 也應支援）===
-
-def test_threads_cli_version():
-    """threads --version 應印出版本號。"""
-    import subprocess
-    import sys
-    result = subprocess.run(
-        [sys.executable, "-m", "threads_pipeline.threads_cli.cli", "--version"],
-        capture_output=True, text=True, encoding="utf-8",
-    )
-    assert result.returncode == 0
-    assert "0.1.0" in result.stdout
-
-
-def test_threads_cli_help():
-    """threads --help 應印使用說明且 exit 0。"""
-    import subprocess
-    import sys
-    result = subprocess.run(
-        [sys.executable, "-m", "threads_pipeline.threads_cli.cli", "--help"],
-        capture_output=True, text=True, encoding="utf-8",
-    )
-    assert result.returncode == 0
-    assert "post" in result.stdout.lower()
+# 註：subprocess-based version/help tests 的 canonical 位置在
+# tests/test_cli_blackbox.py（test_bbox_version / test_bbox_help），
+# 本檔只保留 Typer CliRunner 層的 in-process 測試。

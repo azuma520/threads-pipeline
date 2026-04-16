@@ -69,8 +69,8 @@ def publish_cmd(
 @post_app.command("publish-chain")
 def publish_chain_cmd(
     file: str = typer.Argument(..., help="Input file (- for stdin)"),
-    confirm: bool = typer.Option(False, "--confirm"),
-    yes: bool = typer.Option(False, "--yes"),
+    confirm: bool = typer.Option(False, "--confirm", help="Actually publish chain (default: dry-run)"),
+    yes: bool = typer.Option(False, "--yes", help="Skip interactive confirmation (Agent mode)"),
     on_failure: str = typer.Option(
         "stop", "--on-failure",
         help="Mid-chain failure policy (Level 1 only implements 'stop')",

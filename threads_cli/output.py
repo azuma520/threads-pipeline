@@ -2,7 +2,7 @@
 
 import json
 import sys
-from typing import Any
+from typing import Any, NoReturn
 
 
 def emit(data: Any, *, json_mode: bool = False, message: str | None = None) -> None:
@@ -22,7 +22,7 @@ def emit(data: Any, *, json_mode: bool = False, message: str | None = None) -> N
         print(data)
 
 
-def error(message: str, *, exit_code: int = 1) -> None:
+def error(message: str, *, exit_code: int = 1) -> NoReturn:
     """印 error 到 stderr 並 exit（raises SystemExit）。
 
     Callers 不需要加 return — 此函式一定 exit。
