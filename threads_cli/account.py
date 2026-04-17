@@ -60,6 +60,11 @@ def insights_cmd(
     for metric in data.get("data", []):
         name = metric.get("name", "?")
         values = metric.get("values", [])
+        total = metric.get("total_value", {})
         if values:
             val = values[0].get("value")
-            print(f"  {name:30s} {val}")
+        elif total:
+            val = total.get("value")
+        else:
+            val = "(no data)"
+        print(f"  {name:30s} {val}")

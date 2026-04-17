@@ -32,33 +32,38 @@
 
 ### 唯讀 6 指令（每個指令 human + --json）
 
-- [ ] `threads account info` / `threads account info --json`
-- [ ] `threads account insights` / `threads account insights --json`
-- [ ] `threads posts list --limit 5` / `threads posts list --limit 5 --json`
-- [ ] `threads posts list --cursor <cursor>` 翻頁驗證（若有 next_cursor）
-- [ ] `threads posts search "AI" --limit 5` / `threads posts search "AI" --json`
-- [ ] `threads posts search "人工智慧" --json`（CJK warning: EMPTY_RESULT_CJK）
-- [ ] `threads post insights <real_post_id>` / `--json`
-- [ ] `threads post replies <real_post_id> --limit 5` / `--json`
+- [x] `threads account info` / `threads account info --json`
+- [x] `threads account insights` / `threads account insights --json`
+- [x] `threads posts list --limit 3` / `threads posts list --limit 3 --json`
+- [x] `threads posts list --cursor <cursor>` 翻頁驗證（若有 next_cursor）
+- [x] `threads posts search "AI" --limit 3` / `threads posts search "AI" --json`
+- [x] `threads posts search "人工智慧" --json`（CJK warning: EMPTY_RESULT_CJK）
+- [x] `threads post insights 17952165552108332` / `--json`
+- [x] `threads post replies 17952165552108332 --limit 3` / `--json`
 
 ### delete 真跑
 
-- [ ] 發布測試貼文：`threads post publish "B2 smoke 測試稿（待刪）" --confirm --yes`
-  - post_id: _______________
-- [ ] Dry-run：`threads post delete <id>`
-  - 預期：`[DRY RUN]`、exit 0、`.deleted_posts/` 無新增檔案
-- [ ] Dry-run JSON：`threads post delete <id> --json`
-  - 預期：envelope `{"ok": true, "data": {"dry_run": true, ...}}`
-- [ ] 真刪：`threads post delete <id> --confirm --yes`
-  - 預期：`[OK] Deleted`、stderr `[WARN] irreversible`、`.deleted_posts/{id}_{ts}.json` 有新檔
-- [ ] 驗備份：`cat .deleted_posts/<id>_*.json | python -c "import json,sys; d=json.load(sys.stdin); print(d['captured_before_delete'], d['post']['id'])"`
-  - 預期：`True <post_id>`
+- [x] 發布測試貼文：`threads post publish "B2 smoke 測試稿（待刪）" --confirm --yes`
+  - post_id: 18390799444152846
+- [x] Dry-run：`threads post delete 18390799444152846`
+  - 結果：`[DRY RUN]`、exit 0、`.deleted_posts/` 無新增檔案
+- [x] Dry-run JSON：`threads post delete 18390799444152846 --json`
+  - 結果：envelope `{"ok": true, "data": {"dry_run": true, "post_id": "18390799444152846", ...}}`
+- [x] 真刪：`threads post delete 18390799444152846 --confirm --yes`
+  - 結果：`[OK] Deleted post 18390799444152846`、`[WARN] irreversible`、`.deleted_posts/18390799444152846_20260417-064655.json` 有新檔
+- [x] 驗備份：`captured_before_delete: True, post_id: 18390799444152846, text: B2 smoke 測試稿（待刪）`
+
+## Smoke 期間修正
+
+1. **`follower_demographics` metric 移除**：`fetch_account_insights_cli` 原含 `follower_demographics` metric，Standard Access 下 API 回 400。移除後與 pipeline 版本一致（`views,likes,replies,reposts,quotes,followers_count`）。
+2. **account insights human mode 修正**：API 回傳格式不一致——`views` 用 `values[0].value`、其他 metric 用 `total_value.value`。加入 `total_value` fallback 讓 human mode 正確顯示所有 metric。
 
 ## 已知問題 / 差距
 
 1. **TOKEN_MISSING 在 --json 模式不吐 envelope**：B1 遺留的 `require_token()` 只走 stderr + exit 1。已在 plan Self-Review 明文 scope out 到 B3。
 2. **INVALID_ARGS（Typer 框架層）在 --json 模式不吐 envelope**：框架限制，同 scope out 到 B3。
 3. **pyright `reportPossiblyUnbound` 警告**：`error_with_code` 的 `NoReturn` 標註正確，但此版 pyright 不認 pyrightconfig 的 `reportPossiblyUnbound` key（需改為 `reportPossiblyUnboundVariable`）。不影響 runtime。
+4. **Windows console 中文編碼**：`post replies` human mode 在非 UTF-8 console 下顯示亂碼，`--json` 模式正常。屬 Windows 終端限制，非 CLI bug。
 
 ## Codex 第三方審查
 
@@ -73,5 +78,5 @@ Plan 經 codex tech-spec-reviewer 審查（2026-04-17），判定「需小修」
 
 ## 待使用者授權
 
-- [ ] 手動 smoke 全部打勾後 push 分支
+- [x] 手動 smoke 全部打勾後 push 分支
 - [ ] 使用者授權 merge 到 main

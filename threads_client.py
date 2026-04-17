@@ -191,7 +191,7 @@ def fetch_account_insights_cli(token: str) -> dict:
     url = f"{THREADS_API_BASE}/me/threads_insights"
     params = {
         "access_token": token,
-        "metric": "views,likes,replies,reposts,quotes,followers_count,follower_demographics",
+        "metric": "views,likes,replies,reposts,quotes,followers_count",
     }
     return _request_with_retry(url, params)
 
