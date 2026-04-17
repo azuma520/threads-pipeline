@@ -1,10 +1,11 @@
-"""threads post 子命令群——publish / publish-chain。
+"""threads post 子命令群——publish / publish-chain / insights / replies / delete。
 
 注意：reply 是 top-level command（不在 post.py），見 threads_cli/reply.py。
 """
 
 import sys
 
+import requests
 import typer
 
 from threads_pipeline.publisher import (
@@ -13,7 +14,17 @@ from threads_pipeline.publisher import (
     PublishError,
     ChainMidwayError,
 )
-from threads_pipeline.threads_cli.output import error
+from threads_pipeline.threads_client import (
+    fetch_post_detail,
+    fetch_post_insights_cli,
+    fetch_post_replies,
+)
+from threads_pipeline.threads_cli.output import (
+    error,
+    emit_envelope_json,
+    error_with_code,
+    warn_with_code,
+)
 from threads_pipeline.threads_cli.safety import (
     require_token,
     validate_confirm_yes,
@@ -143,3 +154,46 @@ def publish_chain_cmd(
     print(f"[OK] Published chain of {len(post_ids)} posts:")
     for i, pid in enumerate(post_ids):
         print(f"  {i + 1}. {pid}")
+
+
+def _map_request_error(e: requests.exceptions.RequestException) -> tuple[str, str]:
+    """把 requests exception 對應到 (error_code, message)。"""
+    resp = getattr(e, "response", None)
+    if resp is not None:
+        status = resp.status_code
+        if status == 404:
+            return "NOT_FOUND", f"HTTP 404: resource not found ({e})"
+        if status == 429:
+            return "RATE_LIMIT", f"HTTP 429: rate limited ({e})"
+        return "API_ERROR", f"HTTP {status}: {e}"
+    return "API_ERROR", f"Threads API error: {e}"
+
+
+@post_app.command("insights")
+def insights_cmd(
+    post_id: str = typer.Argument(..., help="Post ID"),
+    json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+):
+    """Fetch insights for a single post."""
+    token = require_token()
+    try:
+        data = fetch_post_insights_cli(post_id, token)
+    except requests.exceptions.RequestException as e:
+        code, msg = _map_request_error(e)
+        error_with_code(code, msg, json_mode=json_mode, exit_code=1)
+
+    if json_mode:
+        emit_envelope_json(data)
+        return
+
+    print(f"[OK] Insights for post {post_id}:")
+    for metric in data.get("data", []):
+        name = metric.get("name", "?")
+        values = metric.get("values", [])
+        if values:
+            val = values[0].get("value")
+            print(f"  {name:20s} {val}")
+
+
+# Task 9 會在此檔下方追加 replies_cmd
+# Task 12 會在此檔下方追加 delete_cmd

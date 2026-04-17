@@ -194,3 +194,12 @@ def test_bbox_posts_list_help_exits_0():
     combined = r.stdout + r.stderr
     assert "--cursor" in combined
     assert "--limit" in combined
+
+
+# === Group 8: B2 post insights ===
+
+def test_bbox_post_insights_help_exits_0():
+    r = run_threads(["post", "insights", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "POST_ID" in combined.upper() or "post_id" in combined
