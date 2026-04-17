@@ -11,7 +11,7 @@ import sys
 import requests
 import typer
 
-from threads_pipeline.threads_client import list_my_posts
+from threads_pipeline.threads_client import list_my_posts, _search_keyword
 from threads_pipeline.threads_cli.output import (
     emit_envelope_json,
     error_with_code,
@@ -94,4 +94,71 @@ def posts_envelope_data(posts: list[dict]) -> dict:
     return {"posts": posts}
 
 
-# Task 8 會在此檔下方追加 search_cmd
+def _contains_cjk(text: str) -> bool:
+    """判斷字串是否含 CJK 字元（U+4E00..U+9FFF 為主）。"""
+    for ch in text:
+        cp = ord(ch)
+        if 0x4E00 <= cp <= 0x9FFF:
+            return True
+        if 0x3400 <= cp <= 0x4DBF:
+            return True
+    return False
+
+
+_SEARCH_HELP = (
+    "Search posts by keyword.\n\n"
+    "⚠️  Standard Access 限制：此指令只會搜尋「你自己」的貼文。\n"
+    "    中文關鍵字通常回 0 筆（API 行為）。\n"
+    "    Advanced Access 核准後才支援跨帳號 / 中文有效搜尋。\n"
+    "    建議：列自己的貼文請改用 `threads posts list`。"
+)
+
+
+@posts_app.command("search", help=_SEARCH_HELP)
+def search_cmd(
+    keyword: str = typer.Argument(..., help="Search keyword"),
+    limit: int = typer.Option(25, "--limit", help=f"Max results (1-{_LIMIT_MAX})"),
+    json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+):
+    """Search posts by keyword (Standard Access 下限制嚴重——見 --help)."""
+    token = require_token()
+    effective_limit, warnings = _clamp_limit(limit)
+
+    has_cjk = _contains_cjk(keyword)
+
+    try:
+        posts = _search_keyword(
+            keyword=keyword,
+            token=token,
+            sort_order="TOP",
+            max_results=effective_limit,
+        )
+    except requests.exceptions.RequestException as e:
+        error_with_code("API_ERROR", f"Threads API error: {e}", json_mode=json_mode, exit_code=1)
+
+    if has_cjk and not posts:
+        warnings.append(warn_with_code(
+            "EMPTY_RESULT_CJK",
+            "Standard Access 下中文關鍵字通常回 0 筆。建議改用 `threads posts list`。",
+        ))
+    elif not posts:
+        warnings.append(warn_with_code(
+            "EMPTY_RESULT",
+            "若本應有結果，可能是 Standard Access 限制（只搜得到自己的貼文）。",
+        ))
+
+    if json_mode:
+        emit_envelope_json({"posts": posts, "keyword": keyword}, warnings=warnings)
+        return
+
+    if not posts:
+        print(f"[OK] 沒有找到 keyword=\"{keyword}\" 的貼文。")
+        return
+
+    print(f"[OK] {len(posts)} match(es) for keyword=\"{keyword}\":")
+    for p in posts:
+        pid = p.get("id", "?")
+        ts = p.get("timestamp", "")
+        text = (p.get("text") or "").replace("\n", " ")
+        preview = text[:80] + ("..." if len(text) > 80 else "")
+        print(f"  {pid}  {ts}  {preview}")

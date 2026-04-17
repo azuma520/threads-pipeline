@@ -203,3 +203,19 @@ def test_bbox_post_insights_help_exits_0():
     assert r.returncode == 0
     combined = r.stdout + r.stderr
     assert "POST_ID" in combined.upper() or "post_id" in combined
+
+
+# === Group 9: B2 posts search ===
+
+def test_bbox_posts_search_help_shows_standard_access_warning():
+    """posts search --help 應在文案中提到 Standard Access 限制。"""
+    r = run_threads(["posts", "search", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "Standard Access" in combined or "standard access" in combined.lower()
+
+
+def test_bbox_posts_search_missing_keyword_exits_2():
+    """threads posts search（缺 keyword）→ exit 2。"""
+    r = run_threads(["posts", "search"])
+    assert r.returncode == 2

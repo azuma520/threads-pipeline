@@ -100,3 +100,55 @@ def test_posts_list_limit_clamp_warning_json():
     assert any(w["code"] == "LIMIT_CLAMPED" for w in parsed.get("warnings", []))
     # 3) 傳給 core 的 limit 應被 clamp 到 100
     assert mock_list.call_args.kwargs["limit"] == 100
+
+
+# === posts search ===
+
+def test_posts_search_english_human_mode():
+    """英文關鍵字：正常流程，不觸發 CJK warning。"""
+    fake_posts = [{"id": "P1", "text": "hello AI"}]
+    with patch("threads_pipeline.threads_cli.posts._search_keyword",
+               return_value=fake_posts), \
+         patch("threads_pipeline.threads_cli.posts.require_token", return_value="fake"):
+        result = runner.invoke(app, ["posts", "search", "AI"])
+    assert result.exit_code == 0
+    assert "P1" in result.output
+    assert "EMPTY_RESULT_CJK" not in result.output
+
+
+def test_posts_search_cjk_empty_json_mode():
+    """中文關鍵字 + 0 筆結果 → warnings 含 EMPTY_RESULT_CJK。"""
+    with patch("threads_pipeline.threads_cli.posts._search_keyword",
+               return_value=[]), \
+         patch("threads_pipeline.threads_cli.posts.require_token", return_value="fake"):
+        result = runner.invoke(app, ["posts", "search", "人工智慧", "--json"])
+    assert result.exit_code == 0
+    json_start = result.output.find("{")
+    json_end = result.output.rfind("}")
+    assert json_start >= 0 and json_end > json_start
+    parsed = json.loads(result.output[json_start:json_end + 1])
+    warning_codes = [w["code"] for w in parsed.get("warnings", [])]
+    assert "EMPTY_RESULT_CJK" in warning_codes
+
+
+def test_posts_search_cjk_nonempty_no_warning():
+    """中文關鍵字但有結果 → 不加 EMPTY_RESULT_CJK warning（只有空才加）。"""
+    with patch("threads_pipeline.threads_cli.posts._search_keyword",
+               return_value=[{"id": "P1", "text": "中文 post"}]), \
+         patch("threads_pipeline.threads_cli.posts.require_token", return_value="fake"):
+        result = runner.invoke(app, ["posts", "search", "中文", "--json"])
+    json_start = result.output.find("{")
+    json_end = result.output.rfind("}")
+    assert json_start >= 0 and json_end > json_start
+    parsed = json.loads(result.output[json_start:json_end + 1])
+    warning_codes = [w["code"] for w in parsed.get("warnings", [])]
+    assert "EMPTY_RESULT_CJK" not in warning_codes
+
+
+def test_posts_search_zero_result_exit_0():
+    """結果 0 筆不是 error（exit 0）。"""
+    with patch("threads_pipeline.threads_cli.posts._search_keyword",
+               return_value=[]), \
+         patch("threads_pipeline.threads_cli.posts.require_token", return_value="fake"):
+        result = runner.invoke(app, ["posts", "search", "xyz_no_match"])
+    assert result.exit_code == 0
