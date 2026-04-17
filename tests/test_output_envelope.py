@@ -1,7 +1,6 @@
 """JSON envelope helpers 的 unit test。"""
 
 import json
-import sys
 
 import pytest
 
@@ -84,7 +83,7 @@ def test_error_with_code_json_mode(capsys):
     assert "[ERROR] oops" in captured.err
 
 
-def test_error_with_code_exit_code_2(capsys):
+def test_error_with_code_exit_code_2():
     """exit_code 參數應傳到 SystemExit.code。"""
     with pytest.raises(SystemExit) as exc_info:
         error_with_code("INVALID_ARGS", "bad flag", json_mode=False, exit_code=2)
