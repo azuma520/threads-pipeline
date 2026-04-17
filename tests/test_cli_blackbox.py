@@ -240,3 +240,37 @@ def test_bbox_post_insights_missing_post_id_exits_2():
     """threads post insights（缺 post_id）→ exit 2。"""
     r = run_threads(["post", "insights"])
     assert r.returncode == 2
+
+
+# === Group 11: B2 post delete ===
+
+def test_bbox_delete_dry_run_no_api():
+    """delete dry-run 應 exit 0, 印 [DRY RUN]。"""
+    r = run_threads(["post", "delete", "POST_FAKE_123"])
+    assert r.returncode == 0
+    assert "[DRY RUN]" in r.stdout
+    assert "POST_FAKE_123" in r.stdout
+
+
+def test_bbox_delete_dry_run_json_envelope():
+    """delete dry-run --json 應吐合法 envelope。"""
+    import json as _json
+    r = run_threads(["post", "delete", "POST_FAKE_123", "--json"])
+    assert r.returncode == 0
+    parsed = _json.loads(r.stdout)
+    assert parsed["ok"] is True
+    assert parsed["data"]["dry_run"] is True
+    assert parsed["data"]["post_id"] == "POST_FAKE_123"
+
+
+def test_bbox_delete_yes_without_confirm_exits_2():
+    """delete --yes 無 --confirm → exit 2。"""
+    r = run_threads(["post", "delete", "POST_1", "--yes"])
+    assert r.returncode == 2
+    assert "[ERROR]" in r.stderr
+
+
+def test_bbox_delete_missing_post_id_exits_2():
+    """delete 缺 post_id → exit 2。"""
+    r = run_threads(["post", "delete"])
+    assert r.returncode == 2
