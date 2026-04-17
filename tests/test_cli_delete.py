@@ -1,10 +1,8 @@
 """threads post delete 指令的 CliRunner 測試——涵蓋所有 path。"""
 
 import json
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 import requests
 from typer.testing import CliRunner
 
