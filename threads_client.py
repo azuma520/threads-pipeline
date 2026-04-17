@@ -268,3 +268,23 @@ def fetch_post_replies(
     data = _request_with_retry(url, params)
     next_cursor = data.get("paging", {}).get("cursors", {}).get("after")
     return {"replies": data.get("data", []), "next_cursor": next_cursor}
+
+
+def delete_post(post_id: str, token: str) -> bool:
+    """DELETE /{post_id} — 刪除貼文。
+
+    Returns:
+        True on success.
+
+    Raises:
+        requests.exceptions.HTTPError: 4xx / 5xx response。
+        requests.exceptions.RequestException: 網路 / timeout。
+
+    注意：此函式**不**走 `_request_with_retry`（DELETE 非 idempotent 的 retry
+    在 Threads API 定義不明；寧可失敗交由使用者決定，不自動重試）。
+    """
+    url = f"{THREADS_API_BASE}/{post_id}"
+    params = {"access_token": token}
+    resp = requests.delete(url, params=params, timeout=30)
+    resp.raise_for_status()
+    return True
