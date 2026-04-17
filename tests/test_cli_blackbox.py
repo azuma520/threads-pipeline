@@ -168,3 +168,109 @@ def test_bbox_json_flag_accepted():
     # 不管是 dry-run（0）還是其他合法 exit code，不應該是 unknown flag 的 2
     assert r.returncode == 0
     assert "hello" in r.stdout
+
+
+# === Group 6: B2 account info ===
+
+def test_bbox_account_info_help_exits_0():
+    """threads account info --help → exit 0, 含 info 關鍵字。"""
+    r = run_threads(["account", "info", "--help"])
+    assert r.returncode == 0
+    # Click 會印 "Usage:"
+    assert "info" in r.stdout.lower()
+
+
+def test_bbox_account_insights_help_exits_0():
+    r = run_threads(["account", "insights", "--help"])
+    assert r.returncode == 0
+    assert "insights" in r.stdout.lower()
+
+
+# === Group 7: B2 posts list ===
+
+def test_bbox_posts_list_help_exits_0():
+    r = run_threads(["posts", "list", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "--cursor" in combined
+    assert "--limit" in combined
+
+
+# === Group 8: B2 post insights ===
+
+def test_bbox_post_insights_help_exits_0():
+    r = run_threads(["post", "insights", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "POST_ID" in combined.upper() or "post_id" in combined
+
+
+# === Group 9: B2 posts search ===
+
+def test_bbox_posts_search_help_shows_standard_access_warning():
+    """posts search --help 應在文案中提到 Standard Access 限制。"""
+    r = run_threads(["posts", "search", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "Standard Access" in combined or "standard access" in combined.lower()
+
+
+def test_bbox_posts_search_missing_keyword_exits_2():
+    """threads posts search（缺 keyword）→ exit 2。"""
+    r = run_threads(["posts", "search"])
+    assert r.returncode == 2
+
+
+# === Group 10: B2 post replies ===
+
+def test_bbox_post_replies_help_exits_0():
+    r = run_threads(["post", "replies", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "--cursor" in combined
+
+
+def test_bbox_post_replies_missing_post_id_exits_2():
+    """threads post replies（缺 post_id）→ exit 2（Typer 框架層）。"""
+    r = run_threads(["post", "replies"])
+    assert r.returncode == 2
+
+
+def test_bbox_post_insights_missing_post_id_exits_2():
+    """threads post insights（缺 post_id）→ exit 2。"""
+    r = run_threads(["post", "insights"])
+    assert r.returncode == 2
+
+
+# === Group 11: B2 post delete ===
+
+def test_bbox_delete_dry_run_no_api():
+    """delete dry-run 應 exit 0, 印 [DRY RUN]。"""
+    r = run_threads(["post", "delete", "POST_FAKE_123"])
+    assert r.returncode == 0
+    assert "[DRY RUN]" in r.stdout
+    assert "POST_FAKE_123" in r.stdout
+
+
+def test_bbox_delete_dry_run_json_envelope():
+    """delete dry-run --json 應吐合法 envelope。"""
+    import json as _json
+    r = run_threads(["post", "delete", "POST_FAKE_123", "--json"])
+    assert r.returncode == 0
+    parsed = _json.loads(r.stdout)
+    assert parsed["ok"] is True
+    assert parsed["data"]["dry_run"] is True
+    assert parsed["data"]["post_id"] == "POST_FAKE_123"
+
+
+def test_bbox_delete_yes_without_confirm_exits_2():
+    """delete --yes 無 --confirm → exit 2。"""
+    r = run_threads(["post", "delete", "POST_1", "--yes"])
+    assert r.returncode == 2
+    assert "[ERROR]" in r.stderr
+
+
+def test_bbox_delete_missing_post_id_exits_2():
+    """delete 缺 post_id → exit 2。"""
+    r = run_threads(["post", "delete"])
+    assert r.returncode == 2

@@ -1,10 +1,12 @@
-"""threads post 子命令群——publish / publish-chain。
+"""threads post 子命令群——publish / publish-chain / insights / replies / delete。
 
 注意：reply 是 top-level command（不在 post.py），見 threads_cli/reply.py。
 """
 
 import sys
+from pathlib import Path
 
+import requests
 import typer
 
 from threads_pipeline.publisher import (
@@ -13,7 +15,22 @@ from threads_pipeline.publisher import (
     PublishError,
     ChainMidwayError,
 )
-from threads_pipeline.threads_cli.output import error
+from threads_pipeline.threads_client import (
+    delete_post,
+    fetch_post_detail,
+    fetch_post_insights_cli,
+    fetch_post_replies,
+)
+from threads_pipeline.threads_cli._backup import (
+    save_delete_backup,
+    BackupError,
+)
+from threads_pipeline.threads_cli.output import (
+    error,
+    emit_envelope_json,
+    error_with_code,
+    warn_with_code,
+)
 from threads_pipeline.threads_cli.safety import (
     require_token,
     validate_confirm_yes,
@@ -143,3 +160,179 @@ def publish_chain_cmd(
     print(f"[OK] Published chain of {len(post_ids)} posts:")
     for i, pid in enumerate(post_ids):
         print(f"  {i + 1}. {pid}")
+
+
+def _map_request_error(e: requests.exceptions.RequestException) -> tuple[str, str]:
+    """把 requests exception 對應到 (error_code, message)。"""
+    resp = getattr(e, "response", None)
+    if resp is not None:
+        status = resp.status_code
+        if status == 404:
+            return "NOT_FOUND", f"HTTP 404: resource not found ({e})"
+        if status == 429:
+            return "RATE_LIMIT", f"HTTP 429: rate limited ({e})"
+        return "API_ERROR", f"HTTP {status}: {e}"
+    return "API_ERROR", f"Threads API error: {e}"
+
+
+@post_app.command("insights")
+def insights_cmd(
+    post_id: str = typer.Argument(..., help="Post ID"),
+    json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+):
+    """Fetch insights for a single post."""
+    token = require_token()
+    try:
+        data = fetch_post_insights_cli(post_id, token)
+    except requests.exceptions.RequestException as e:
+        code, msg = _map_request_error(e)
+        error_with_code(code, msg, json_mode=json_mode, exit_code=1)
+
+    if json_mode:
+        emit_envelope_json(data)
+        return
+
+    print(f"[OK] Insights for post {post_id}:")
+    for metric in data.get("data", []):
+        name = metric.get("name", "?")
+        values = metric.get("values", [])
+        if values:
+            val = values[0].get("value")
+            print(f"  {name:20s} {val}")
+
+
+_LIMIT_MAX_REPLIES = 100
+
+
+@post_app.command("replies")
+def replies_cmd(
+    post_id: str = typer.Argument(..., help="Post ID"),
+    limit: int = typer.Option(25, "--limit", help=f"Max replies (1-{_LIMIT_MAX_REPLIES})"),
+    cursor: str | None = typer.Option(None, "--cursor", help="Pagination cursor"),
+    json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+):
+    """List replies to a post (paged; use --cursor for next page)."""
+    token = require_token()
+    warnings: list[dict[str, str]] = []
+    effective_limit = limit
+    if effective_limit > _LIMIT_MAX_REPLIES:
+        warnings.append(warn_with_code(
+            "LIMIT_CLAMPED",
+            f"limit 從 {limit} clamp 到 {_LIMIT_MAX_REPLIES}",
+        ))
+        effective_limit = _LIMIT_MAX_REPLIES
+    if effective_limit < 1:
+        warnings.append(warn_with_code("LIMIT_CLAMPED", "limit clamp 到 1"))
+        effective_limit = 1
+
+    try:
+        result = fetch_post_replies(post_id, token, limit=effective_limit, cursor=cursor)
+    except requests.exceptions.RequestException as e:
+        code, msg = _map_request_error(e)
+        error_with_code(code, msg, json_mode=json_mode, exit_code=1)
+
+    replies = result["replies"]
+    next_cursor = result["next_cursor"]
+
+    if json_mode:
+        emit_envelope_json({"replies": replies}, warnings=warnings, next_cursor=next_cursor)
+        return
+
+    if not replies:
+        print(f"[OK] Post {post_id} 尚無回覆。")
+        return
+
+    print(f"[OK] {len(replies)} reply(s) for post {post_id}:")
+    for r in replies:
+        rid = r.get("id", "?")
+        user = r.get("username", "?")
+        text = (r.get("text") or "").replace("\n", " ")
+        preview = text[:80] + ("..." if len(text) > 80 else "")
+        print(f"  {rid}  @{user}  {preview}")
+
+    if next_cursor:
+        print(
+            f"[INFO] 還有更多資料。下一頁請加：--cursor {next_cursor}",
+            file=sys.stderr,
+        )
+
+
+_DELETE_BACKUP_DIR = Path(".deleted_posts")
+_DELETE_DETAIL_FIELDS = "id,text,timestamp,media_type,permalink,username,media_url,media_product_type"
+
+
+@post_app.command("delete")
+def delete_cmd(
+    post_id: str = typer.Argument(..., help="Post ID to delete"),
+    confirm: bool = typer.Option(False, "--confirm", help="Actually delete (default: dry-run)"),
+    yes: bool = typer.Option(False, "--yes", help="Skip interactive confirmation (Agent mode)"),
+    json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+):
+    """Delete a post (4-layer safety + local backup before deletion).
+
+    警告：此操作不可逆。備份目錄：.deleted_posts/。
+    """
+    token = require_token()
+    is_tty = sys.stdin.isatty()
+    validate_confirm_yes(confirm=confirm, yes=yes, is_tty=is_tty)
+
+    if not confirm:
+        if json_mode:
+            emit_envelope_json({
+                "dry_run": True,
+                "post_id": post_id,
+                "message": "Would delete this post. Add --confirm --yes to actually delete.",
+            })
+            return
+        print(f"[DRY RUN] Would delete post_id={post_id}")
+        print("[INFO] 此操作不可逆。要真刪請加 --confirm --yes。", file=sys.stderr)
+        print("[INFO] 要看內容請先跑 `threads post insights <id>` / `threads post replies <id>`。", file=sys.stderr)
+        return
+
+    if not yes:
+        print(f"About to DELETE post {post_id}. This is irreversible.")
+        if not interactive_confirm("Really delete?"):
+            print("(cancelled)")
+            return
+
+    try:
+        post_data = fetch_post_detail(post_id, token, fields=_DELETE_DETAIL_FIELDS)
+    except requests.exceptions.RequestException as e:
+        code, msg = _map_request_error(e)
+        error_with_code(code, msg, json_mode=json_mode, exit_code=1)
+
+    try:
+        backup_path = save_delete_backup(
+            post_id=post_id,
+            post_data=post_data,
+            backup_dir=_DELETE_BACKUP_DIR,
+        )
+    except BackupError as e:
+        error_with_code(
+            "BACKUP_FAILED",
+            f"Backup failed before delete; post NOT deleted: {e}",
+            json_mode=json_mode,
+            exit_code=1,
+        )
+
+    try:
+        delete_post(post_id, token)
+    except requests.exceptions.RequestException as e:
+        error_with_code(
+            "DELETE_FAILED",
+            f"Delete request failed (backup preserved at {backup_path}): {e}",
+            json_mode=json_mode,
+            exit_code=1,
+        )
+
+    if json_mode:
+        emit_envelope_json({
+            "deleted": True,
+            "post_id": post_id,
+            "backup_path": str(backup_path),
+        })
+        return
+
+    print(f"[OK] Deleted post {post_id}")
+    print(f"  backup: {backup_path}")
+    print("[WARN] This operation is irreversible.", file=sys.stderr)
