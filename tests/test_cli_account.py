@@ -46,3 +46,31 @@ def test_account_info_api_error_json_mode():
     parsed = json.loads(result.output.strip().split("\n")[0])
     assert parsed["ok"] is False
     assert parsed["error"]["code"] == "API_ERROR"
+
+
+# === account insights ===
+
+def test_account_insights_human_mode():
+    """人類模式：stdout 含 metric 名稱。"""
+    with patch("threads_pipeline.threads_cli.account.fetch_account_insights_cli",
+               return_value={"data": [
+                   {"name": "views", "values": [{"value": 1234}]},
+                   {"name": "likes", "values": [{"value": 56}]},
+               ]}), \
+         patch("threads_pipeline.threads_cli.account.require_token", return_value="fake"):
+        result = runner.invoke(app, ["account", "insights"])
+    assert result.exit_code == 0
+    assert "views" in result.output
+    assert "1234" in result.output
+
+
+def test_account_insights_json_mode():
+    """JSON 模式：envelope 保留 API 結構。"""
+    fake_data = {"data": [{"name": "views", "values": [{"value": 42}]}]}
+    with patch("threads_pipeline.threads_cli.account.fetch_account_insights_cli",
+               return_value=fake_data), \
+         patch("threads_pipeline.threads_cli.account.require_token", return_value="fake"):
+        result = runner.invoke(app, ["account", "insights", "--json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed == {"ok": True, "data": fake_data}

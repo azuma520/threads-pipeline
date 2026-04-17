@@ -41,4 +41,25 @@ def info_cmd(
         print(f"  profile_pic: {pic}")
 
 
-# Task 5 會在此檔下方追加 insights_cmd
+@account_app.command("insights")
+def insights_cmd(
+    json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+):
+    """Fetch account-level insights (views / followers 等)."""
+    token = require_token()
+    try:
+        data = fetch_account_insights_cli(token)
+    except requests.exceptions.RequestException as e:
+        error_with_code("API_ERROR", f"Threads API error: {e}", json_mode=json_mode, exit_code=1)
+
+    if json_mode:
+        emit_envelope_json(data)
+        return
+
+    print("[OK] Account insights:")
+    for metric in data.get("data", []):
+        name = metric.get("name", "?")
+        values = metric.get("values", [])
+        if values:
+            val = values[0].get("value")
+            print(f"  {name:30s} {val}")

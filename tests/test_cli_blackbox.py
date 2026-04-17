@@ -178,3 +178,9 @@ def test_bbox_account_info_help_exits_0():
     assert r.returncode == 0
     # Click 會印 "Usage:"
     assert "info" in r.stdout.lower()
+
+
+def test_bbox_account_insights_help_exits_0():
+    r = run_threads(["account", "insights", "--help"])
+    assert r.returncode == 0
+    assert "insights" in r.stdout.lower()
