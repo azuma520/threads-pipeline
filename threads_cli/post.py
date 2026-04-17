@@ -195,5 +195,60 @@ def insights_cmd(
             print(f"  {name:20s} {val}")
 
 
-# Task 9 會在此檔下方追加 replies_cmd
+_LIMIT_MAX_REPLIES = 100
+
+
+@post_app.command("replies")
+def replies_cmd(
+    post_id: str = typer.Argument(..., help="Post ID"),
+    limit: int = typer.Option(25, "--limit", help=f"Max replies (1-{_LIMIT_MAX_REPLIES})"),
+    cursor: str | None = typer.Option(None, "--cursor", help="Pagination cursor"),
+    json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
+):
+    """List replies to a post (paged; use --cursor for next page)."""
+    token = require_token()
+    warnings: list[dict[str, str]] = []
+    effective_limit = limit
+    if effective_limit > _LIMIT_MAX_REPLIES:
+        warnings.append(warn_with_code(
+            "LIMIT_CLAMPED",
+            f"limit 從 {limit} clamp 到 {_LIMIT_MAX_REPLIES}",
+        ))
+        effective_limit = _LIMIT_MAX_REPLIES
+    if effective_limit < 1:
+        warnings.append(warn_with_code("LIMIT_CLAMPED", "limit clamp 到 1"))
+        effective_limit = 1
+
+    try:
+        result = fetch_post_replies(post_id, token, limit=effective_limit, cursor=cursor)
+    except requests.exceptions.RequestException as e:
+        code, msg = _map_request_error(e)
+        error_with_code(code, msg, json_mode=json_mode, exit_code=1)
+
+    replies = result["replies"]
+    next_cursor = result["next_cursor"]
+
+    if json_mode:
+        emit_envelope_json({"replies": replies}, warnings=warnings, next_cursor=next_cursor)
+        return
+
+    if not replies:
+        print(f"[OK] Post {post_id} 尚無回覆。")
+        return
+
+    print(f"[OK] {len(replies)} reply(s) for post {post_id}:")
+    for r in replies:
+        rid = r.get("id", "?")
+        user = r.get("username", "?")
+        text = (r.get("text") or "").replace("\n", " ")
+        preview = text[:80] + ("..." if len(text) > 80 else "")
+        print(f"  {rid}  @{user}  {preview}")
+
+    if next_cursor:
+        print(
+            f"[INFO] 還有更多資料。下一頁請加：--cursor {next_cursor}",
+            file=sys.stderr,
+        )
+
+
 # Task 12 會在此檔下方追加 delete_cmd

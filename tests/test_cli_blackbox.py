@@ -219,3 +219,24 @@ def test_bbox_posts_search_missing_keyword_exits_2():
     """threads posts search（缺 keyword）→ exit 2。"""
     r = run_threads(["posts", "search"])
     assert r.returncode == 2
+
+
+# === Group 10: B2 post replies ===
+
+def test_bbox_post_replies_help_exits_0():
+    r = run_threads(["post", "replies", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "--cursor" in combined
+
+
+def test_bbox_post_replies_missing_post_id_exits_2():
+    """threads post replies（缺 post_id）→ exit 2（Typer 框架層）。"""
+    r = run_threads(["post", "replies"])
+    assert r.returncode == 2
+
+
+def test_bbox_post_insights_missing_post_id_exits_2():
+    """threads post insights（缺 post_id）→ exit 2。"""
+    r = run_threads(["post", "insights"])
+    assert r.returncode == 2
