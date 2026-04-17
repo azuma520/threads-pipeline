@@ -26,8 +26,7 @@ docs/
 │   ├── testing.md
 │   ├── roadmap.md
 │   ├── api-exploration-plan.md
-│   ├── api-exploration-results.md
-│   └── api-exploration-raw.json
+│   └── api-exploration-results.md
 └── legal/
     ├── privacy-policy.html        ← GitHub Pages 公開
     └── data-deletion.html         ← GitHub Pages 公開

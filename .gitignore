@@ -31,5 +31,8 @@ output/advisor/
 # 內部備忘錄（不對外；放這個目錄一律不 commit）
 docs/dev/private/
 
+# 開發 handoffs / plans / specs — 私人筆記，不對外
+docs/superpowers/
+
 # Delete backup directory (批次 B2 — 本地備份，不進版控)
 .deleted_posts/

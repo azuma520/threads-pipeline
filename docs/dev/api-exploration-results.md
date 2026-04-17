@@ -1,8 +1,7 @@
 # Threads API 功能邊界探索結果
 
 > 測試時間：2026-04-01 10:06 Asia/Taipei  
-> 測試帳號：azuma01130626 (ID: 34782204798093277)  
-> 原始數據：[api-exploration-raw.json](api-exploration-raw.json)
+> 測試帳號：azuma01130626 (ID: 34782204798093277)
 
 ---
 
