@@ -168,3 +168,13 @@ def test_bbox_json_flag_accepted():
     # 不管是 dry-run（0）還是其他合法 exit code，不應該是 unknown flag 的 2
     assert r.returncode == 0
     assert "hello" in r.stdout
+
+
+# === Group 6: B2 account info ===
+
+def test_bbox_account_info_help_exits_0():
+    """threads account info --help → exit 0, 含 info 關鍵字。"""
+    r = run_threads(["account", "info", "--help"])
+    assert r.returncode == 0
+    # Click 會印 "Usage:"
+    assert "info" in r.stdout.lower()
