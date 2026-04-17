@@ -1,8 +1,6 @@
-"""threads_client.py 的 B2 唯讀 helper unit test（mock requests）。"""
+"""threads_client.py 的 B2 唯讀 helper unit test（mock _request_with_retry）。"""
 
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 from threads_pipeline.threads_client import (
     fetch_account_info,
@@ -14,22 +12,13 @@ from threads_pipeline.threads_client import (
 )
 
 
-def _mock_get(return_json: dict, status_code: int = 200):
-    """Helper: 建一個 requests.get 的 mock。"""
-    mock_resp = MagicMock()
-    mock_resp.status_code = status_code
-    mock_resp.json.return_value = return_json
-    mock_resp.raise_for_status = MagicMock()
-    return mock_resp
-
-
 # === fetch_account_info ===
 
 def test_fetch_account_info_calls_me_endpoint():
     with patch("threads_pipeline.threads_client._request_with_retry") as mock_req:
         mock_req.return_value = {"id": "ME_123", "username": "foo"}
         result = fetch_account_info(token="TKN")
-    args, kwargs = mock_req.call_args
+    args, _ = mock_req.call_args
     url = args[0]
     params = args[1]
     assert "/me" in url
