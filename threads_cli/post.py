@@ -181,7 +181,7 @@ def insights_cmd(
     json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
 ):
     """Fetch insights for a single post."""
-    token = require_token()
+    token = require_token(json_mode=json_mode)
     try:
         data = fetch_post_insights_cli(post_id, token)
     except requests.exceptions.RequestException as e:
@@ -212,7 +212,7 @@ def replies_cmd(
     json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
 ):
     """List replies to a post (paged; use --cursor for next page)."""
-    token = require_token()
+    token = require_token(json_mode=json_mode)
     warnings: list[dict[str, str]] = []
     effective_limit = limit
     if effective_limit > _LIMIT_MAX_REPLIES:
@@ -272,7 +272,7 @@ def delete_cmd(
 
     警告：此操作不可逆。備份目錄：.deleted_posts/。
     """
-    token = require_token()
+    token = require_token(json_mode=json_mode)
     is_tty = sys.stdin.isatty()
     validate_confirm_yes(confirm=confirm, yes=yes, is_tty=is_tty)
 

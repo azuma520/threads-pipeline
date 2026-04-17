@@ -21,7 +21,7 @@ def info_cmd(
     json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
 ):
     """Fetch account basic info (/me)."""
-    token = require_token()
+    token = require_token(json_mode=json_mode)
     try:
         data = fetch_account_info(token)
     except requests.exceptions.RequestException as e:
@@ -46,7 +46,7 @@ def insights_cmd(
     json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
 ):
     """Fetch account-level insights (views / followers 等)."""
-    token = require_token()
+    token = require_token(json_mode=json_mode)
     try:
         data = fetch_account_insights_cli(token)
     except requests.exceptions.RequestException as e:

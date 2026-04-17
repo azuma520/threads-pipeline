@@ -1,5 +1,5 @@
 {
   "extraPaths": ["."],
   "reportMissingImports": "warning",
-  "reportPossiblyUnbound": "warning"
+  "reportPossiblyUnboundVariable": "warning"
 }

@@ -63,8 +63,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except click.exceptions.UsageError as e:
         # Typer/Click 內建的 parser / usage error（例：缺 argument、未知 flag）
-        # 印出 Click 預設格式的 error 到 stderr，exit code 2
         e.show()
+        if "--json" in (argv or sys.argv[1:]):
+            from threads_pipeline.threads_cli.output import emit_error_json
+            emit_error_json("INVALID_ARGS", str(e.format_message()))
         return 2
     except click.exceptions.Exit as e:
         # typer.Exit 繼承自 click.exceptions.Exit，統一接這層

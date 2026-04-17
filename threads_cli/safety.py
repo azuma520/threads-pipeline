@@ -3,18 +3,20 @@
 import os
 import sys
 
+from threads_pipeline.threads_cli.output import error_with_code
 
-def require_token() -> str:
-    """取得 THREADS_ACCESS_TOKEN；缺失則 exit 1。"""
+
+def require_token(*, json_mode: bool = False) -> str:
+    """取得 THREADS_ACCESS_TOKEN；缺失則 exit 1（json_mode 時吐 envelope）。"""
     token = os.environ.get("THREADS_ACCESS_TOKEN", "")
     if not token:
-        print(
-            "[ERROR] THREADS_ACCESS_TOKEN not set.\n"
-            "  Add it to .env or export as environment variable.\n"
-            "  Get a token: https://developers.facebook.com/tools/access-token-tool/",
-            file=sys.stderr,
+        error_with_code(
+            "TOKEN_MISSING",
+            "THREADS_ACCESS_TOKEN not set. "
+            "Add it to .env or export as environment variable.",
+            json_mode=json_mode,
+            exit_code=1,
         )
-        sys.exit(1)
     return token
 
 

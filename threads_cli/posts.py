@@ -54,7 +54,7 @@ def list_cmd(
     json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
 ):
     """List your own posts (paged; use --cursor to fetch next page)."""
-    token = require_token()
+    token = require_token(json_mode=json_mode)
     effective_limit, warnings = _clamp_limit(limit)
 
     try:
@@ -121,7 +121,7 @@ def search_cmd(
     json_mode: bool = typer.Option(False, "--json", help="Output as JSON envelope"),
 ):
     """Search posts by keyword (Standard Access 下限制嚴重——見 --help)."""
-    token = require_token()
+    token = require_token(json_mode=json_mode)
     effective_limit, warnings = _clamp_limit(limit)
 
     has_cjk = _contains_cjk(keyword)
