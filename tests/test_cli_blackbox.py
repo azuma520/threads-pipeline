@@ -184,3 +184,13 @@ def test_bbox_account_insights_help_exits_0():
     r = run_threads(["account", "insights", "--help"])
     assert r.returncode == 0
     assert "insights" in r.stdout.lower()
+
+
+# === Group 7: B2 posts list ===
+
+def test_bbox_posts_list_help_exits_0():
+    r = run_threads(["posts", "list", "--help"])
+    assert r.returncode == 0
+    combined = r.stdout + r.stderr
+    assert "--cursor" in combined
+    assert "--limit" in combined
