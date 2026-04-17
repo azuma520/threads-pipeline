@@ -156,3 +156,115 @@ def refresh_token(token: str) -> str | None:
     except Exception as e:
         logger.warning("Token 續期失敗（可能已完全過期）：%s", e)
         return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 批次 B2：CLI 唯讀指令專用的公開 helper
+#
+# 設計原則：
+#   - 全部透過 _request_with_retry 走 GET（保留既有 429 退避邏輯）
+#   - 回傳 dict 結構盡量貼近 API 原始格式，CLI 層負責轉成人讀 / envelope
+#   - 分頁 helpers（list_my_posts / fetch_post_replies）統一回 {"<items>": [...], "next_cursor": str | None}
+# ═══════════════════════════════════════════════════════════════════════════
+
+_DEFAULT_POST_FIELDS = "id,text,timestamp,media_type,permalink,username"
+_DEFAULT_REPLY_FIELDS = "id,text,timestamp,username"
+_DEFAULT_ACCOUNT_FIELDS = "id,username,threads_profile_picture_url,threads_biography"
+
+
+def fetch_account_info(token: str) -> dict:
+    """GET /me — 帳號基本資料。"""
+    url = f"{THREADS_API_BASE}/me"
+    params = {
+        "access_token": token,
+        "fields": _DEFAULT_ACCOUNT_FIELDS,
+    }
+    return _request_with_retry(url, params)
+
+
+def fetch_account_insights_cli(token: str) -> dict:
+    """GET /me/threads_insights — 帳號 insights（followers / views 等）。
+
+    注意：與 insights_tracker._fetch_account_insights 刻意分開——pipeline 的
+    版本針對 SQLite upsert 定制化欄位、CLI 版本回傳 API 原樣給 envelope 使用。
+    """
+    url = f"{THREADS_API_BASE}/me/threads_insights"
+    params = {
+        "access_token": token,
+        "metric": "views,likes,replies,reposts,quotes,followers_count,follower_demographics",
+    }
+    return _request_with_retry(url, params)
+
+
+def list_my_posts(
+    token: str,
+    limit: int = 25,
+    cursor: str | None = None,
+) -> dict:
+    """GET /me/threads — 自己的貼文列表，支援分頁。
+
+    回傳：
+        {"posts": [...], "next_cursor": "..." | None}
+    """
+    url = f"{THREADS_API_BASE}/me/threads"
+    params: dict = {
+        "access_token": token,
+        "limit": limit,
+        "fields": _DEFAULT_POST_FIELDS,
+    }
+    if cursor:
+        params["after"] = cursor
+    data = _request_with_retry(url, params)
+    next_cursor = data.get("paging", {}).get("cursors", {}).get("after")
+    return {"posts": data.get("data", []), "next_cursor": next_cursor}
+
+
+def fetch_post_detail(
+    post_id: str,
+    token: str,
+    fields: str | None = None,
+) -> dict:
+    """GET /{post_id} — 單則貼文詳情。
+
+    fields 可自訂——delete 備份會傳更完整的欄位集（含 permalink / timestamp）。
+    """
+    url = f"{THREADS_API_BASE}/{post_id}"
+    params = {
+        "access_token": token,
+        "fields": fields or _DEFAULT_POST_FIELDS,
+    }
+    return _request_with_retry(url, params)
+
+
+def fetch_post_insights_cli(post_id: str, token: str) -> dict:
+    """GET /{post_id}/insights — 單則貼文 insights。"""
+    url = f"{THREADS_API_BASE}/{post_id}/insights"
+    params = {
+        "access_token": token,
+        "metric": "views,likes,replies,reposts,quotes",
+    }
+    return _request_with_retry(url, params)
+
+
+def fetch_post_replies(
+    post_id: str,
+    token: str,
+    limit: int = 25,
+    cursor: str | None = None,
+) -> dict:
+    """GET /{post_id}/replies — 貼文回覆列表，支援分頁。
+
+    回傳：
+        {"replies": [...], "next_cursor": "..." | None}
+    """
+    url = f"{THREADS_API_BASE}/{post_id}/replies"
+    params: dict = {
+        "access_token": token,
+        "limit": limit,
+        "fields": _DEFAULT_REPLY_FIELDS,
+    }
+    if cursor:
+        params["after"] = cursor
+    data = _request_with_retry(url, params)
+    next_cursor = data.get("paging", {}).get("cursors", {}).get("after")
+    return {"replies": data.get("data", []), "next_cursor": next_cursor}
