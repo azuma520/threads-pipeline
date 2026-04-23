@@ -30,7 +30,10 @@ description: "How to use the `threads` CLI and `threads-advisor` tools to operat
 | `threads post replies <post_id>` | 單篇貼文的回覆 | 否 | 有 |
 | `threads post publish "text"` | 發文 | 是 | 否 |
 | `threads post publish-chain file` | 發串文 | 是 | 否 |
-| `threads reply <post_id> "text"` | 回覆貼文 | 是 | 否 |
+| `threads reply add <post_id> "text"` | 回覆貼文 | 是 | 否 |
+| `threads reply hide <reply_id>` | 隱藏某則回覆 | 是 | 否 |
+| `threads reply unhide <reply_id>` | 取消隱藏某則回覆 | 是 | 否 |
+| `threads account mentions` | 查看 @mentions（我被提及的貼文） | 否 | 有 |
 | `threads post delete <post_id>` | 刪除貼文 | 是 | 有 |
 
 ### threads-advisor（AI 顧問）
@@ -129,7 +132,12 @@ threads post publish-chain drafts/my-thread.txt --confirm --yes
 ### 回覆
 
 ```bash
-threads reply <post_id> "回覆內容" --confirm --yes
+# 新增回覆
+threads reply add <post_id> "回覆內容" --confirm --yes
+
+# 隱藏 / 取消隱藏他人的回覆（reply_id 從 threads post replies 取得）
+threads reply hide <reply_id>
+threads reply unhide <reply_id>
 ```
 
 ### 刪除
@@ -203,7 +211,7 @@ threads-advisor analyze
 
 1. `threads post replies <post_id> --json` → 看有哪些回覆
 2. 找到要回覆的 reply_id
-3. `threads reply <reply_id> "回覆內容" --confirm --yes`
+3. `threads reply add <reply_id> "回覆內容" --confirm --yes`
 
 ### 「我想發串文」
 
