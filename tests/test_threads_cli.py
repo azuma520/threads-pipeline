@@ -46,7 +46,7 @@ def test_cli_reply_dry_run():
     """reply 無 --confirm 應 dry-run。"""
     with patch("threads_pipeline.threads_cli.reply.reply_to") as mock_rep, \
          patch("threads_pipeline.threads_cli.reply.require_token", return_value="fake"):
-        result = runner.invoke(app, ["reply", "POST_123", "我的回覆"])
+        result = runner.invoke(app, ["reply", "add", "POST_123", "我的回覆"])
 
     assert result.exit_code == 0
     assert mock_rep.call_count == 0
@@ -57,7 +57,7 @@ def test_cli_reply_confirm_yes_calls_api():
     """reply --confirm --yes 應呼叫 reply_to。"""
     with patch("threads_pipeline.threads_cli.reply.reply_to", return_value="REPLY_ABC") as mock_rep, \
          patch("threads_pipeline.threads_cli.reply.require_token", return_value="fake"):
-        result = runner.invoke(app, ["reply", "POST_123", "回覆", "--confirm", "--yes"])
+        result = runner.invoke(app, ["reply", "add", "POST_123", "回覆", "--confirm", "--yes"])
 
     assert result.exit_code == 0
     mock_rep.assert_called_once()

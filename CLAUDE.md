@@ -2,6 +2,45 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Session 開工規則
+
+**每次 session 開始時，在回應用戶第一個任務之前，必須：**
+
+1. **讀今日/最新 handoff 的「七、收工回寫」** — 看接力棒（上個 session 留言「下個 session 開工先做 X」）
+   - 路徑：`docs/handoffs/session-handoff-{YYYYMMDD}.md`
+   - 每天只有一份，每個 session 是一個 `## Session HH:MM` 區塊
+2. **讀 memory** `project_progress_{YYYYMMDD}.md`（若存在）— Claude 跨 session 專用的進度摘要
+3. 告訴用戶：「最新接力棒寫 X；要繼續還是先做你剛說的？」
+4. 用戶決定優先級後再動手
+
+不可以跳過這些步驟直接開工。
+
+## Handoff 格式（每日 append-only）
+
+**檔名**：`docs/handoffs/session-handoff-{YYYYMMDD}.md`
+
+**規則**：同一天所有 session 寫在同一份檔案。每個 session 結束時 append 一個 `## Session HH:MM` 區塊。**禁止修改前面 session 的內容**。
+
+每個 Session 區塊包含七個欄位：
+
+| 欄位 | 必填？ | 寫什麼 | 不寫什麼 |
+|------|--------|--------|---------|
+| 一、今日聚焦 | ✅ | 今天要推進的主線項目 | — |
+| 二、完成事項 | ✅ | 具體做了什麼，盡量量化 | 不寫過程流水帳 |
+| 三、洞見紀錄 | 可「無」 | 過程中發現的心得、經驗（對人和 AI 都有用） | 不重複已存在的 memory |
+| 四、阻塞/卡點 | 可「無」 | 想做但做不了的事 | — |
+| 五、行動複盤 | 可「無」 | 工作方式/流程的改進反省 | 不寫自我感覺良好的廢話 |
+| 六、檔案異動 | ✅ | 新增/搬移/刪除了什麼檔案 | 不列沒改的檔案 |
+| 七、收工回寫 | ✅ | (1) `memory/project_progress_{YYYYMMDD}.md` 建立或更新；(2) `memory/MEMORY.md` 索引同步；(3) 下次 session 的 next action 提示 | — |
+
+Stop hook 會擋：沒建檔、或最新 Session 區塊缺欄位，session 不准結束。
+
+## 記憶系統與 handoff 的分工
+
+- **handoff**（`docs/handoffs/`）：專案內、git 可追蹤、人讀用、append-only
+- **memory**（`~/.claude/projects/.../memory/`）：跨專案 Claude 載入、指針式、可刪改
+- 兩者互補，不是擇一。handoff 是「這天具體做了什麼」的人類紀錄；memory 是「下次 Claude 開 session 要記得的事」的 AI context
+
 ## Project Overview
 
 A daily pipeline that collects AI/tech trend posts from Meta Threads API, analyzes them with Claude CLI (`claude -p`), tracks account/post insights in SQLite, and generates Markdown reports via Jinja2 templates. Written in Traditional Chinese (繁體中文).
@@ -22,7 +61,11 @@ threads-advisor review --text "草稿文字"
 # Threads API 操作（寫入指令預設 dry-run）
 threads post publish "測試文字"                       # dry-run
 threads post publish "測試文字" --confirm --yes       # 真發（Agent 模式）
-threads reply <post_id> "回覆內容" --confirm --yes
+threads reply add <post_id> "回覆內容" --confirm --yes
+threads reply hide <reply_id>
+threads reply unhide <reply_id>
+threads account mentions
+threads account mentions --json --limit 50
 threads post publish-chain drafts/smoke-test.txt --confirm --yes
 
 # 每日 pipeline（不 CLI 化）
