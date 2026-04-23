@@ -170,6 +170,7 @@ def refresh_token(token: str) -> str | None:
 _DEFAULT_POST_FIELDS = "id,text,timestamp,media_type,permalink,username"
 _DEFAULT_REPLY_FIELDS = "id,text,timestamp,username"
 _DEFAULT_ACCOUNT_FIELDS = "id,username,threads_profile_picture_url,threads_biography"
+_DEFAULT_MENTION_FIELDS = "id,text,username,timestamp,permalink"
 
 
 def fetch_account_info(token: str) -> dict:
@@ -217,6 +218,29 @@ def list_my_posts(
     data = _request_with_retry(url, params)
     next_cursor = data.get("paging", {}).get("cursors", {}).get("after")
     return {"posts": data.get("data", []), "next_cursor": next_cursor}
+
+
+def list_mentions(
+    token: str,
+    limit: int = 25,
+    cursor: str | None = None,
+) -> dict:
+    """GET /me/threads_mentions — 查詢 @ 自己帳號的 mentions，支援分頁。
+
+    回傳：
+        {"mentions": [...], "next_cursor": "..." | None}
+    """
+    url = f"{THREADS_API_BASE}/me/threads_mentions"
+    params: dict = {
+        "access_token": token,
+        "limit": limit,
+        "fields": _DEFAULT_MENTION_FIELDS,
+    }
+    if cursor:
+        params["after"] = cursor
+    data = _request_with_retry(url, params)
+    next_cursor = data.get("paging", {}).get("cursors", {}).get("after")
+    return {"mentions": data.get("data", []), "next_cursor": next_cursor}
 
 
 def fetch_post_detail(
