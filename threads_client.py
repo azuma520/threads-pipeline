@@ -288,3 +288,31 @@ def delete_post(post_id: str, token: str) -> bool:
     resp = requests.delete(url, params=params, timeout=30)
     resp.raise_for_status()
     return True
+
+
+def hide_reply(reply_id: str, token: str, hide: bool = True) -> bool:
+    """POST /{reply_id}/manage_reply — 隱藏或取消隱藏回覆。
+
+    Args:
+        reply_id: 要操作的 reply ID（是別人對你貼文的回覆 ID）。
+        token: Access token。
+        hide: True=隱藏、False=取消隱藏。
+
+    Returns:
+        True on success.
+
+    Raises:
+        requests.exceptions.HTTPError: 4xx/5xx。
+        requests.exceptions.RequestException: 網路 / timeout。
+
+    注意：與 delete_post 一樣不走 _request_with_retry——POST 有副作用，
+    重試語意不明；失敗交由呼叫端決定。
+    """
+    url = f"{THREADS_API_BASE}/{reply_id}/manage_reply"
+    params = {
+        "access_token": token,
+        "hide": "true" if hide else "false",
+    }
+    resp = requests.post(url, params=params, timeout=30)
+    resp.raise_for_status()
+    return True
