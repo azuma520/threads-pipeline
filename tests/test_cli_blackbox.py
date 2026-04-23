@@ -111,7 +111,7 @@ def test_bbox_publish_missing_text_exits_2():
 
 def test_bbox_reply_dry_run_output():
     """threads reply POST_123 "text"（無 --confirm）→ dry-run，exit 0，stdout 含 [DRY RUN]。"""
-    r = run_threads(["reply", "POST_123", "my reply"])
+    r = run_threads(["reply", "add", "POST_123", "my reply"])
     assert r.returncode == 0
     assert "[DRY RUN]" in r.stdout
     assert "POST_123" in r.stdout
@@ -119,14 +119,14 @@ def test_bbox_reply_dry_run_output():
 
 def test_bbox_reply_yes_without_confirm_exits_2():
     """threads reply POST_123 "x" --yes（無 --confirm）→ exit 2。"""
-    r = run_threads(["reply", "POST_123", "x", "--yes"])
+    r = run_threads(["reply", "add", "POST_123", "x", "--yes"])
     assert r.returncode == 2
     assert "[ERROR]" in r.stderr
 
 
 def test_bbox_reply_missing_text_exits_2():
     """threads reply POST_123（缺 text）→ exit 2。"""
-    r = run_threads(["reply", "POST_123"])
+    r = run_threads(["reply", "add", "POST_123"])
     assert r.returncode == 2
 
 
