@@ -140,3 +140,104 @@ class TestWalkPosts:
         found = ftp.walk_posts(data)
         codes = {p.get("code") for p in found if p.get("code")}
         assert len(codes) >= 12, f"expected ≥12 unique codes, got {len(codes)}"
+
+
+class TestExtractRelayJson:
+    # 含 1 個 post-shaped node（pk + code + caption + user 四件齊），walk_posts 計數 = 1
+    _POST_NODE = (
+        '{"pk":"pk_c1","code":"c1","caption":{"text":"x"},"user":{"username":"u"},'
+        '"text_post_app_info":{"is_reply":false}}'
+    )
+    # 含 2 個 post-shaped node（main + quoted），walk_posts 計數 = 2
+    _TWO_POSTS = (
+        '{"main":{"pk":"pk_c1","code":"c1","caption":{"text":"x"},"user":{"username":"u"},'
+        '"text_post_app_info":{"is_reply":false},'
+        '"quoted_post":{"pk":"pk_c2","code":"c2","caption":{"text":"y"},"user":{"username":"v"},'
+        '"text_post_app_info":{"is_reply":false}}}}'
+    )
+
+    def test_finds_barcelona_query(self):
+        # 唯一 marker script，回傳那份。
+        html = (
+            '<html><body>'
+            '<script type="application/json" data-sjs>{"other":"data"}</script>'
+            '<script type="application/json" data-sjs>'
+            '{"require":[["foo","bar"]],"marker":"BarcelonaPostPageDirectQuery",'
+            f'"data":{self._POST_NODE}}}'
+            '</script>'
+            '</body></html>'
+        )
+        result = ftp.extract_relay_json(html)
+        assert result is not None
+        assert result["marker"] == "BarcelonaPostPageDirectQuery"
+
+    def test_picks_script_with_most_post_nodes(self):
+        html = (
+            '<html><body>'
+            '<script type="application/json" data-sjs>'
+            '{"id":"A","note":"BarcelonaPostPageDirectQuery metadata only"}'
+            '</script>'
+            '<script type="application/json" data-sjs>'
+            f'{{"id":"B","marker":"BarcelonaPostPageDirectQuery","d":{self._POST_NODE}}}'
+            '</script>'
+            '<script type="application/json" data-sjs>'
+            f'{{"id":"C","marker":"BarcelonaPostPageDirectQuery","d":{self._TWO_POSTS}}}'
+            '</script>'
+            '</body></html>'
+        )
+        result = ftp.extract_relay_json(html)
+        assert result is not None
+        assert result["id"] == "C"
+
+    def test_returns_none_when_absent(self):
+        html = '<html><body><script>nothing</script></body></html>'
+        assert ftp.extract_relay_json(html) is None
+
+    def test_skips_scripts_with_invalid_json(self):
+        html = (
+            '<html><body>'
+            '<script type="application/json" data-sjs>not json BarcelonaPostPageDirectQuery</script>'
+            '<script type="application/json" data-sjs>'
+            f'{{"marker":"BarcelonaPostPageDirectQuery","d":{self._POST_NODE}}}'
+            '</script>'
+            '</body></html>'
+        )
+        result = ftp.extract_relay_json(html)
+        assert result is not None
+        assert result["marker"] == "BarcelonaPostPageDirectQuery"
+
+    def test_attributes_in_reversed_order(self):
+        # I3
+        html = (
+            '<html><body>'
+            '<script data-sjs data-content-len="123" type="application/json">'
+            f'{{"marker":"BarcelonaPostPageDirectQuery","payload":42,"d":{self._POST_NODE}}}'
+            '</script>'
+            '</body></html>'
+        )
+        result = ftp.extract_relay_json(html)
+        assert result is not None
+        assert result["payload"] == 42
+
+    def test_returns_none_when_marker_present_but_no_posts(self):
+        html = (
+            '<html><body>'
+            '<script type="application/json" data-sjs>'
+            '{"id":"A","note":"BarcelonaPostPageDirectQuery metadata only"}'
+            '</script>'
+            '<script type="application/json" data-sjs>'
+            '{"id":"B","note":"BarcelonaPostPageDirectQuery another ref"}'
+            '</script>'
+            '</body></html>'
+        )
+        assert ftp.extract_relay_json(html) is None
+
+    def test_ignores_data_sjs_without_json_type(self):
+        html = (
+            '<html><body>'
+            '<script data-sjs type="text/javascript">'
+            'window.x = {"marker":"BarcelonaPostPageDirectQuery"};'
+            '</script>'
+            '</body></html>'
+        )
+        assert ftp.extract_relay_json(html) is None

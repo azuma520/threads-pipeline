@@ -10,6 +10,7 @@ Output: drafts/library/{YYYY-MM-DD}_{author}_{code}/{post.md, meta.json, screens
 """
 from __future__ import annotations
 
+import json
 import re
 
 
@@ -87,3 +88,44 @@ def walk_posts(data) -> list[dict]:
 
     _walk(data)
     return found
+
+
+_RELAY_QUERY_MARKER = "BarcelonaPostPageDirectQuery"
+# I3: 匹配任何含 data-sjs 屬性的 <script>；屬性順序由 runtime 檢查以相容 Meta 變動。
+_SCRIPT_RE = re.compile(
+    r'<script([^>]*\bdata-sjs\b[^>]*)>(.*?)</script>',
+    re.DOTALL,
+)
+
+
+def extract_relay_json(html: str) -> dict | None:
+    """Return the parsed JSON of the `<script data-sjs>` whose content contains
+    the Relay query marker and yields the **most post-shaped nodes** when walked.
+
+    Implementation note: Threads 頁面通常有 7 支 script 都含 marker（query 定義、
+    cache reference、metadata、實際結果），只有其中一支是實際查詢結果並內含
+    post records。不可取「第一個含 marker」——必須對所有 candidate 跑
+    `walk_posts` 計數，取最大。
+
+    Accepts `data-sjs` attribute in any order relative to `type=` (I3). Requires
+    both `data-sjs` **and** `type="application/json"`. Returns None if no marker
+    script parses or all parsed scripts yield 0 post-shaped nodes.
+    """
+    best: dict | None = None
+    best_count = 0
+    for match in _SCRIPT_RE.finditer(html):
+        attrs = match.group(1)
+        if 'type="application/json"' not in attrs:
+            continue
+        payload = match.group(2)
+        if _RELAY_QUERY_MARKER not in payload:
+            continue
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        count = len(walk_posts(parsed))
+        if count > best_count:
+            best = parsed
+            best_count = count
+    return best
