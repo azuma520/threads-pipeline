@@ -313,3 +313,74 @@
     - C 路線：實測 `threads-angle-gate` skill / 第 2 層 `planner.py` / merge `feat/advisor-plan`
   - **P3**. 清理 `threads-kanisleo-post.png` 與 `.playwright-cli/`（持續待辦）
 - [x] SSOT 清單（本 session 不變）
+
+---
+
+## Session 17:18
+
+### 一、今日聚焦
+
+- 實測 `threads-angle-gate` skill（0824 接力棒 P0 / 本 session 主線）
+- 順便把 skill 註冊進 `.claude/skills/` 讓 `Skill` 工具叫得到
+
+### 二、完成事項
+
+- **Skill 註冊**：`.claude/skills/threads-angle-gate/` 建立（`ln -s` 在 Windows Git Bash 降級為檔案複製，不是真 symlink；junction 方案試 `mklink /J` 前需 `rm -rf` 權限被擋，停在複製模式）
+  - 結果：`Skill` 工具可以正常 invoke；available skills 清單熱載入看得到
+  - 副作用：以後改 `skills/threads-angle-gate/SKILL.md` 不會自動同步到 `.claude/skills/`
+- **`threads-cli` 漂移發現**：`skills/threads-cli/SKILL.md` 8948 bytes（今天 `M`）vs `.claude/skills/threads-cli/SKILL.md` 8047 bytes（0417 舊版）。使用者指示這是 CLI 開發中刻意狀態，**暫不處理**
+- **跑一次完整 gate 流程**，使用者拋「作家的 PISA 日記法 + 我 harness 有類似機制」題目
+  - 中途使用者貼出作家第二篇文章（Framework / SOP / Reflection 三資產），對齊「邊取」語意
+  - 共創 pivot：**初始素材是「作家 PISA 日記法」→ 共創收斂到「AI 工具協作裡容易被忽略的一環：複盤機制」**
+  - 三個共創關鍵詞全部由使用者自主講出：「我們」（刻意第一人稱）、「邊做、邊取、邊迭代」、「這些是大家會忽略的事情」
+- **產出** `drafts/ai-tool-reflection-rhythm.angle.md`（source: co_created）
+- **另一篇 candidate 記於 `related_future_post`**：「AI 是工具，也是團隊成員」（使用者自主 articulate：「我認為我跟 AI 是一個協作團隊」），defer 不入本篇
+
+### 三、洞見紀錄
+
+- **Skill 經得起 adversarial live run**：我中途提了個 edgy sharpness（「沒有反思節奏就只是在搭工具箱不是做系統」），使用者 reject 後我立即吸收並 re-draft 成 gentle 版本。Skill 鐵律「願意現場改變想法」運作正常——但這條鐵律**必須在 AI 自己已經有傾向時才會被測試到**，純 compliance 的訪談輪次測不出來。
+- **Gate 的真正價值 = 防止 surface reading**：初始素材明面上看是「作家 PISA 日記法」，gate 走完才浮出「AI 工具協作裡被忽略的複盤機制」。如果直接寫，幾乎必然寫成「我也有類似做法分享」的扁平共鳴文——surface reading 的陷阱。
+- **「我 vs 我們」是 gate 挖出的單句銳利點**：使用者自述「我認為我跟 AI 是一個協作團隊」——這是他過去沒明說、但一直在做的事被訪談挖出來 articulate 的時刻。Defer 成另一篇時機到了會是真的有份量的 post。
+- **Windows Git Bash 的 `ln -s` 默認行為是複製不是 symlink**，不設 `MSYS=winsymlinks:nativestrict` 不會切到 native symlink。這種平台差異對 skill/plugin 分發是坑——寫安裝文件時不能假設 `ln -s` 有效。
+
+### 四、阻塞/卡點
+
+- **過程讚 / 成果未知**：使用者自己說的——gate 過程跑得順，但 angle.md 能不能真的變好貼文要等下一階段（填內文）才知道。gate 只負責定角度，驗不了結果。
+- **Skill 註冊目前是複製模式**，維護要手動 sync（或下次改用 junction / 啟用 Developer Mode symlink）。
+
+### 五、行動複盤
+
+- **TDD for docs 的第三輪驗證**：早上 skill 寫完跑 2 輪 subagent RED-GREEN-REFACTOR，下午第三輪是**真使用者實測**。三輪都抓到需改進的點或確認規則有效——這模式持續值得。
+- **Meta problem first / task second 的時機**：中途使用者問「skill invoke 什麼意思」+「我們做 skill 註冊」— 這類 meta 技術問題打斷訪談不是壞事，但要**明確跳出/跳回訪談者角色**讓使用者感受到切換。我在跳回時宣告「（skill 正式載入，進訪談者模式）」有效，無宣告會讓使用者混淆。
+- **Source label 嚴格執行沒失敗**：兩次帶觀察進場（Turn 9「邊做邊學 vs 另外撥時間」、Turn 10「我們 vs 我」）都用明示 phrase「這是我個人的觀察」開頭——skill 的 phrase-level enforcement 在真實對話裡不難守，反而幫我避免 soft-assertion 的誘惑。
+
+### 六、檔案異動
+
+**新增**：
+- `.claude/skills/threads-angle-gate/SKILL.md`（複製自 `skills/threads-angle-gate/SKILL.md`，含附帶 `.claude_review_state.json` 被一起複製過來）
+- `drafts/ai-tool-reflection-rhythm.angle.md`（C 路線第 1 層首份真實產出）
+
+**修改**：
+- `docs/handoffs/session-handoff-20260424.md`（append 本 Session 17:18）
+
+**未動**：
+- `skills/threads-angle-gate/SKILL.md` 源檔（skill 規則不需改，三輪驗證都通過）
+- `threads-cli` 漂移（使用者指示保留）
+- 代碼（純 skill 測試，零代碼）
+- A 路線 PR #4 / B 路線 `feat/profile-discovery` / C 路線其他檔案
+
+### 七、收工回寫
+
+- [x] Memory：`project_progress_20260424.md` 要 append「Session 17:18 — angle-gate skill 首次真實測試 + `drafts/ai-tool-reflection-rhythm.angle.md` 落檔」段落
+- [x] `MEMORY.md` 索引：0424 條目已存在，無需新增
+- [ ] **下次 session next action（linear）**：
+  - **P0**. 決定 `drafts/ai-tool-reflection-rhythm.angle.md` 是否要繼續往下走（填內文 → Threads 貼文）。要的話下一階段可以把使用者累積的復盤紀錄拿進來當真實案例素材（sharpness 三個點舉例）
+  - **P1**（跟 13:15 接力棒合併）：
+    - PR #4 決定：自 merge / 等 review / 先擱
+    - `feat/profile-discovery` branch：開 PR / 保留 / 併進 B 路線送審
+    - A / B / C 三路線 3 選 1（同 17:17 接力棒）
+  - **P2**. 若要正規化 skill 註冊（單一 source of truth 不漂移），研究 Windows Developer Mode 或 `mklink /J` junction（本 session 被 `rm -rf` 權限擋停）
+  - **P3**. 清理 `threads-kanisleo-post.png` / `.playwright-cli/`（持續待辦）
+- [x] SSOT 清單：
+  - **新增** C 路線第 1 層首份真實 angle.md：`drafts/ai-tool-reflection-rhythm.angle.md`（後續填內文流程進場的輸入）
+  - 其餘 SSOT 不變
