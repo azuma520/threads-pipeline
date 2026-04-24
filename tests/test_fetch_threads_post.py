@@ -267,3 +267,51 @@ class TestFilterByFlags:
     def test_e_is_always_dropped(self):
         out = ftp.filter_by_flags(self.ITEMS, include_replies=True, include_self_replies=True)
         assert all(cls != "E" for _, cls in out)
+
+
+class TestRenderMarkdown:
+    META = {
+        "author": "foo",
+        "code": "c1",
+        "url": "https://www.threads.com/@foo/post/c1",
+        "fetched_at": "2026-04-24T10:00:00+00:00",
+    }
+
+    def _p(self, code, text, ts, username="foo"):
+        return {
+            "code": code,
+            "caption": {"text": text},
+            "user": {"username": username},
+            "taken_at": ts,
+        }
+
+    def test_includes_frontmatter(self):
+        md = ftp.render_markdown([(self._p("c1", "hello", 100), "A")], self.META)
+        assert md.startswith("---\n")
+        assert "author: foo" in md
+        assert "code: c1" in md
+
+    def test_groups_by_class_order_a_b_c_d(self):
+        items = [
+            (self._p("d1", "other reply", 300, username="bob"), "D"),
+            (self._p("b1", "author thread", 200), "B"),
+            (self._p("a1", "main", 100), "A"),
+        ]
+        md = ftp.render_markdown(items, self.META)
+        a_pos = md.index("[A]")
+        b_pos = md.index("[B]")
+        d_pos = md.index("[D]")
+        assert a_pos < b_pos < d_pos
+
+    def test_orders_by_taken_at_within_class(self):
+        items = [
+            (self._p("b2", "second", 200), "B"),
+            (self._p("b1", "first", 100), "B"),
+        ]
+        md = ftp.render_markdown(items, self.META)
+        assert md.index("first") < md.index("second")
+
+    def test_handles_missing_caption_text(self):
+        item = ({"code": "x", "caption": {}, "user": {"username": "foo"}, "taken_at": 1}, "A")
+        md = ftp.render_markdown([item], self.META)
+        assert "[A] @foo" in md  # does not crash, renders empty body

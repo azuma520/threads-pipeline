@@ -143,3 +143,36 @@ def filter_by_flags(
     if include_self_replies:
         kept.add("C")
     return [(p, c) for p, c in posts_with_class if c in kept]
+
+
+def render_markdown(
+    posts_with_class: list[tuple[dict, str]],
+    meta: dict,
+) -> str:
+    """Render a markdown document with YAML frontmatter + sections per class.
+
+    Sections appear in A -> B -> C -> D order; E is ignored. Within a section,
+    posts are sorted by `taken_at` ascending.
+    """
+    lines = ["---"]
+    for key in ("author", "code", "url", "fetched_at"):
+        lines.append(f"{key}: {meta[key]}")
+    lines.append("---")
+    lines.append("")
+
+    by_class: dict[str, list[dict]] = {"A": [], "B": [], "C": [], "D": []}
+    for p, c in posts_with_class:
+        if c in by_class:
+            by_class[c].append(p)
+
+    for cls in ("A", "B", "C", "D"):
+        for p in sorted(by_class[cls], key=lambda q: q.get("taken_at") or 0):
+            username = (p.get("user") or {}).get("username", "")
+            code = p.get("code", "")
+            body = (p.get("caption") or {}).get("text", "") or ""
+            lines.append(f"## [{cls}] @{username} · {code}")
+            lines.append("")
+            lines.append(body)
+            lines.append("")
+
+    return "\n".join(lines)
