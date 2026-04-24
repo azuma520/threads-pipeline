@@ -46,20 +46,28 @@
 
 這正是本 app 的架構特性，上次送審沒有明確宣告，導致審查員以一般 app 標準判斷「demo 不完整」。
 
-### 1.3 本次重送範圍（2026-04-23 決策）
+### 1.3 本次重送範圍（2026-04-23 最終決策）
+
+**決策演進**：5 → 4 → **3**（重新聚焦在「實質增益」）
 
 | 項目 | 決策 | 理由 |
 |---|---|---|
-| 範圍 | 重送 5 個 permission | 排除 `profile_discovery` |
-| 策略 | 一次全送 | 爭取時效，共用 Architecture Note |
-| 排除 `profile_discovery` | 本輪不送 | 現有代碼無實際 use case，為 demo 新增功能違反產品邊界原則 |
+| 範圍 | 重送 **3 個** permission | 聚焦在 Standard Access 做不到的新能力 |
+| 排除 `content_publish` | 本輪不送 | **Standard Access 下 app owner 發自己貼文本來就能做**（`threads post publish` 已在用）；Advanced 核准後增益為 0。硬送 = 用 reviewer 時間換零增益。 |
+| 排除 `manage_replies` | 本輪不送 | 同上——自己貼文下的 reply add/hide/unhide 本來就能做；Advanced 增益為 0。 |
+| 排除 `manage_mentions` | 本輪不送，延後單送 | `/me/threads_mentions` endpoint 在核准前完全鎖住（實測回 `Tried accessing nonexisting field` / HTTP 500），無法錄 live demo。硬送重蹈「demo 不完整」覆轍。 |
+| **加回 `profile_discovery`** | **本輪送** | **真實 use case 浮現**：user 的核心需求是「URL-first 讀他人公開貼文 text 做分析」——oEmbed 實測只回嵌入 widget 無 text；`keyword_search` 需要先有 keyword；唯一乾淨路徑是 profile_discovery（URL → 拆 @user + shortcode → 列 user posts → 匹配 shortcode → 拿 text）。之前排除「代碼無 use case」的判斷錯了，use case 就是這個。 |
 
-**本輪重送清單**：
-1. `threads_content_publish`
-2. `threads_keyword_search`
-3. `threads_manage_replies`
-4. `threads_read_replies`
-5. `threads_manage_mentions`
+**本輪重送清單**（3 個）：
+1. `threads_keyword_search` — 解鎖跨帳號 keyword search + 中文搜尋
+2. `threads_read_replies` — 解鎖讀取任何公開貼文的 replies
+3. `threads_profile_discovery` — 解鎖 URL-first 讀他人公開貼文 text（旗艦 use case）
+
+**延後單送清單**：
+- `threads_manage_mentions` — 3 個核准後再送，採用 Architecture-Demo 策略（見 `demo-script-manage-mentions.md` 的 Plan B）
+
+**永不再送**（本輪及未來）：
+- `threads_content_publish` / `threads_manage_replies` — Standard Access 已涵蓋，無 Advanced 增益
 
 ---
 
@@ -99,43 +107,61 @@ The screen recording shows: (1) the CLI command, (2) the API response, and
 - [x] 決定是否納入 `profile_discovery`（Y：排除）
 - [x] 起草 Architecture Note
 
-### Stage 2｜每個 permission 的 demo 腳本撰寫 ⏳ 未開始
+### Stage 2｜每個 permission 的 demo 腳本撰寫 ✅ 已完成
 
 每份腳本獨立存檔：`docs/app-review/demo-script-{permission}.md`
 
 | Permission | 腳本檔 | 狀態 |
 |---|---|---|
-| `content_publish` | `demo-script-content-publish.md` | ⏳ 未建 |
-| `keyword_search` | `demo-script-keyword-search.md` | ⏳ 未建 |
-| `manage_replies` | `demo-script-manage-replies.md` | ⏳ 未建 |
-| `read_replies` | `demo-script-read-replies.md` | ⏳ 未建 |
-| `manage_mentions` | `demo-script-manage-mentions.md` | ⏳ 未建 |
+| `keyword_search` | `demo-script-keyword-search.md` | ✅ 已建（本輪用） |
+| `read_replies` | `demo-script-read-replies.md` | ✅ 已建（本輪用） |
+| **`profile_discovery`** | **`demo-script-profile-discovery.md`** | **✅ 已建（本輪用，Plan B Architecture-Demo）** |
+| `content_publish` | `demo-script-content-publish.md` | 📦 已建但本輪不送（Standard 已涵蓋，無增益） |
+| `manage_replies` | `demo-script-manage-replies.md` | 📦 已建但本輪不送（同上） |
+| `manage_mentions` | `demo-script-manage-mentions.md` | ⏸️ 延後單送（Plan B：Architecture-Demo） |
 
-每份腳本應包含：
+每份腳本包含：
 1. **Use case 一句話**（英文，與送審 Notes 一致）
 2. **Demo 步驟表**：CLI 指令順序 × 期望輸出 × 要切到 Threads client 驗證的畫面
 3. **旁白腳本**（英文，逐句）
 4. **螢幕字幕與 tooltip 對照表**
 5. **事前準備**（要有幾則貼文、幾個回覆、什麼狀態）
 
-### Stage 3｜CLI 補齊 ✅ 已完成
+### Stage 3｜CLI 補齊 ⏳ 本輪擴增（新增 profile_discovery）
 
-**現況盤點**（2026-04-23）：
+**現況盤點**（2026-04-23 更新）：
 
 | Permission | 需要展示的動作 | 目前 CLI 指令 | 缺口 |
 |---|---|---|---|
-| `content_publish` | 發文、發串文 | `threads post publish`、`threads post publish-chain` | **無缺** ✅ |
 | `keyword_search` | 關鍵字搜尋 | `threads posts search` | **無缺** ✅ |
 | `read_replies` | 讀某貼文回覆 | `threads post replies` | **無缺** ✅ |
-| `manage_replies` | 新增回覆、隱藏/取消隱藏、調整誰能回覆 | `threads reply add` / `threads reply hide` / `threads reply unhide` | **無缺** ✅ |
-| `manage_mentions` | 查 @mentions、顯示回傳內容 | `threads account mentions` | **無缺** ✅ |
+| **`profile_discovery`** | **URL → post text（旗艦）+ 列公開貼文** | — | **本 session 實作中** |
+| `content_publish` | 發文、發串文 | `threads post publish` / `publish-chain` | **無缺**（本輪不送） |
+| `manage_replies` | 新增回覆、hide/unhide | `threads reply add/hide/unhide` | **無缺**（本輪不送） |
+| `manage_mentions` | 查 @mentions | `threads account mentions` | **無缺**（延後單送） |
 
-**待補工作**：
-- [x] 在 `threads_client.py` 新增 `hide_reply(reply_id)` / `unhide_reply(reply_id)` 方法
-- [x] 在 `threads_cli/reply.py`（或新建 `replies.py`）新增子命令 `threads reply hide <id>` / `threads reply unhide <id>`
-- [x] 在 `threads_client.py` 新增 `list_mentions(since, until, limit)` 方法（對應 `/me/threads_mentions` 端點）
-- [x] 在 `threads_cli/account.py`（或新建 `mentions.py`）新增子命令 `threads account mentions`
-- [x] 補單元測試 + 手動 smoke（手動 smoke 在 Task 8）
+**已完成（Stage 3 上一批）**：
+- [x] `hide_reply` / `unhide_reply` API helper + CLI + tests
+- [x] `list_mentions` API helper + CLI + tests
+
+**Scope 決策（2026-04-23）**：
+- User 真實 use case 是「URL → 讀內文 → 學習」的 reader 工具，不是系統性 scraper
+- 本輪只實作 **`lookup` + `posts`** 兩條 CLI，`get`（查 profile 基本資料）不實作
+- Endpoint 探針結果（`scripts/probe_profile_discovery.py`）：`ENDPOINT_LOCKED` — `/{username}` 與 `/{username}/threads` 對自己與他人皆回 HTTP 400 `Object ... does not exist, cannot be loaded due to missing permissions`
+- 代碼前瞻實作（照 API spec），unit test 全 mock；影片走 Plan B Architecture-Demo + 誠實展示 400 錯誤當 Step 6 素材
+
+**實作清單（本 session）**：
+- [ ] `threads_client.py` 新增 `fetch_user_profile(username)` — 內部 helper，未來需要時用
+- [ ] `threads_client.py` 新增 `fetch_user_threads(username, limit, cursor)` — 列某 user 公開貼文；`posts` CLI 直用
+- [ ] `threads_client.py` 新增 `resolve_post_by_url(url, token)` — URL-first helper：regex 拆 `@username` + shortcode → 呼 `fetch_user_threads` → 匹配 permalink → 回 post dict
+- [ ] 新建 `threads_cli/profile.py` Typer sub-app：
+  - `threads profile lookup <URL>` — **旗艦指令**（Plan B Step 2 / 6 用）
+  - `threads profile posts <username> [--limit N] [--cursor C]` — 列公開貼文（Plan B Step 3 代碼走讀素材）
+- [ ] 在 `threads_cli/cli.py` 註冊 `profile_app`
+- [ ] 錯誤碼對應（見 `demo-script-profile-discovery.md` 附錄 A）：`UNSUPPORTED_URL` / `PERMISSION_REQUIRED` / `POST_NOT_FOUND` / `API_ERROR`
+- [ ] 新建 `tests/test_threads_client_profile.py`（mock）+ `tests/test_cli_profile.py`（human + JSON + 錯誤碼）
+- [ ] 跑 full test suite 確認綠
+- [ ] 手動 smoke `threads profile --help` / `threads profile lookup --help`（確認指令註冊成功；實際呼叫預期 400）
 
 ### Stage 4｜錄影 + 剪輯 ⏳ 未開始
 
@@ -147,19 +173,28 @@ The screen recording shows: (1) the CLI command, (2) the API response, and
 - 每次 API 回應之後切到 Threads app / web 驗證結果（用同一帳號登入）
 - 結尾 2 秒畫面：展示 use case value（一句話）
 
-**逐部 checklist**（階段 2 腳本寫完後再展開）：
-- [ ] `content_publish.mp4`
-- [ ] `keyword_search.mp4`
-- [ ] `manage_replies.mp4`
-- [ ] `read_replies.mp4`
-- [ ] `manage_mentions.mp4`
+**逐部 checklist**（本輪 3 部）：
+- [x] `keyword_search.mp4` — 錄於 2026-04-23，原檔 `20260423-0854-57.9175595.mp4`
+- [x] `read_replies.mp4` — 錄於 2026-04-23，原檔 `20260423-0848-17.2520671.mp4`
+- [ ] **`profile_discovery.mp4`** — 下 session 代碼 + 腳本就位後錄
+- [ ] ~~`content_publish.mp4`~~（本輪不送，不錄）
+- [ ] ~~`manage_replies.mp4`~~（本輪不送，不錄）
+- [ ] ~~`manage_mentions.mp4`~~（延後單送，分開錄）
 
-### Stage 5｜送審 ⏳ 未開始
+**拍攝前實值對照表**：`docs/app-review/recording-checklist.md`（2026-04-23 產；本輪只剩 profile_discovery 待錄，下 session 補）
 
-- [ ] 每個 permission 的 Notes 文案定稿（含 Architecture Note + Use Case 描述）
-- [ ] 上傳 5 部影片至 Meta Developer Dashboard
-- [ ] 每個 permission 的送審表單勾選與文案貼上
+### Stage 5｜送審 ⏳ 未開始（本輪等 profile_discovery 就位才送）
+
+**本輪送 3 個 permission（keyword_search / read_replies / profile_discovery）：**
+- [ ] 3 個 permission 的 Notes 文案定稿（含 Architecture Note + Use Case 描述）
+- [ ] 上傳 3 部影片至 Meta Developer Dashboard
+- [ ] 3 個 permission 的送審表單勾選與文案貼上
 - [ ] Submit
+
+**次輪單送 `manage_mentions`（3 個核准後）：**
+- [ ] 實測 `/me/threads_mentions` 是否仍 locked；若已解鎖改回 live demo
+- [ ] 仍 locked 時走 Architecture-Demo Plan B（見 `demo-script-manage-mentions.md`）
+- [ ] （可選）送審前開 Meta Developer Support ticket 釐清 permission-locked endpoint 的 demo 要求
 
 ### Stage 6｜收尾 ⏳ 未開始
 
@@ -183,3 +218,9 @@ _（目前無 — 所有 Q 已決議）_
 | 日期 | 變更 |
 |---|---|
 | 2026-04-23 | 文檔建立。範圍決策：排除 `profile_discovery`，重送 5 個 permission |
+| 2026-04-23 | Stage 3 CLI 補齊完成（6 commits in main）。Stage 2 五份 demo 腳本完成。 |
+| 2026-04-23 | 實測 `/me/threads_mentions` 回 `nonexisting field` / HTTP 500。重送範圍 5 → 4（排除 `manage_mentions`，延後單送）。mentions 腳本保留，補 Plan B（Architecture-Demo）。 |
+| 2026-04-23 | 錄完 `keyword_search.mp4` / `read_replies.mp4` 2 部影片。 |
+| 2026-04-23 | 範圍再調：4 → **3**。**排除** `content_publish` / `manage_replies`（Standard Access 已涵蓋，Advanced 增益為 0）；**加回** `profile_discovery`（user 的核心 URL-first use case 浮現；oEmbed 實測只回嵌入 widget 無 text；唯一乾淨路徑是 profile_discovery）。下 session 補 profile_discovery CLI + 腳本 + 影片。 |
+| 2026-04-23 | P0 endpoint 探針（`scripts/probe_profile_discovery.py`）verdict = `ENDPOINT_LOCKED`——`/{username}` 對自己與他人皆回 HTTP 400。決議 **Option A**：代碼前瞻寫（mock test）、腳本走 Plan B Architecture-Demo + 誠實揭露 400 錯誤當影片 Step 6 素材。CLI scope 縮為 `lookup` + `posts` 兩條（`get` 不做）——user 真實 use case 是「URL → 讀內文 → 學習」的 reader 工具。 |
+| 2026-04-23 | Stage 2 profile_discovery 腳本完成（`docs/app-review/demo-script-profile-discovery.md`，Plan A 未來版 + Plan B 本輪 Architecture-Demo 雙結構）。 |
