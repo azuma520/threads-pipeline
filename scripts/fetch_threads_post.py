@@ -54,3 +54,36 @@ def classify(post: dict, main_author: str) -> str:
     if author != main_author and reply_to == main_author:
         return "D"
     return "E"
+
+
+def walk_posts(data) -> list[dict]:
+    """Recursively collect post-like dicts from a parsed Relay JSON blob.
+
+    A node qualifies as a post only if it's a dict containing **all four** keys:
+    `pk` (post primary key), `code`, `caption` (dict), `user` (dict). The `pk`
+    requirement (I1) guards against preview/reference fragments that share the
+    other three keys but do not carry the post PK — those would otherwise
+    classify as false "A" main posts.
+
+    Does not dedupe — callers handle that via `{p["code"]: p for p in ...}`
+    because the same post can appear under multiple Relay query results.
+    """
+    found: list[dict] = []
+
+    def _walk(node):
+        if isinstance(node, dict):
+            if (
+                "pk" in node
+                and "code" in node
+                and isinstance(node.get("caption"), dict)
+                and isinstance(node.get("user"), dict)
+            ):
+                found.append(node)
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(data)
+    return found

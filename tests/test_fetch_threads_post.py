@@ -79,3 +79,64 @@ class TestClassify:
             {"user": {"username": self.MAIN}, "text_post_app_info": {}},
             self.MAIN,
         ) == "A"
+
+
+_FIXTURE = _ROOT / "tests" / "fixtures" / "relay_kanisleo_DXO2PlPEoOQ.json"
+
+
+class TestWalkPosts:
+    def _post_node(self, code, is_reply=False):
+        # 實測 Threads Relay post 形狀：pk + code + caption(dict) + user(dict)
+        # + text_post_app_info(巢 is_reply / reply_to_author)。
+        return {
+            "pk": f"pk_{code}",
+            "code": code,
+            "caption": {"text": f"hello {code}"},
+            "user": {"username": "u"},
+            "text_post_app_info": {"is_reply": is_reply},
+        }
+
+    def test_flat_list(self):
+        data = {"posts": [self._post_node("c1")]}
+        assert len(ftp.walk_posts(data)) == 1
+
+    def test_nested_deeply(self):
+        data = {"a": {"b": {"c": [self._post_node("c1"), self._post_node("c2")]}}}
+        found = ftp.walk_posts(data)
+        assert {p["code"] for p in found} == {"c1", "c2"}
+
+    def test_rejects_non_post_nodes(self):
+        data = {"caption": "just a string", "user": "not-a-dict"}
+        assert ftp.walk_posts(data) == []
+
+    def test_handles_list_at_root(self):
+        data = [self._post_node("c1"), {"unrelated": 1}]
+        assert len(ftp.walk_posts(data)) == 1
+
+    def test_rejects_node_without_pk(self):
+        # I1: guard against false positives. Threads 的 preview / quoted reference
+        # 有時以相似 shape 嵌入但缺 pk（post primary key）。缺 pk 視為非真 post。
+        node_without_pk = {
+            "code": "preview",
+            "caption": {"text": "preview text"},
+            "user": {"username": "u"},
+            # 刻意缺 pk
+        }
+        assert ftp.walk_posts({"x": node_without_pk}) == []
+
+    def test_includes_nested_post_with_pk(self):
+        # I1: 貼文 A 內嵌 quoted_post（也帶 pk）時，外層和內層都應取。
+        main = self._post_node("outer", is_reply=False)
+        quoted = self._post_node("quoted", is_reply=False)
+        main["quoted_post"] = quoted
+        found = ftp.walk_posts(main)
+        assert {p["code"] for p in found} == {"outer", "quoted"}
+
+    @pytest.mark.skipif(not _FIXTURE.exists(), reason="real Relay fixture missing; run Task 0 Step 6")
+    def test_real_fixture_yields_at_least_12_posts(self):
+        # I2: schema-drift regression anchor. Handoff 18:07-D 驗證 @kanisleo328/post/DXO2PlPEoOQ
+        # 共 12 個 post code。若 Meta 改欄位名（如 is_reply / caption / user）此 test 首先紅燈。
+        data = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+        found = ftp.walk_posts(data)
+        codes = {p.get("code") for p in found if p.get("code")}
+        assert len(codes) >= 12, f"expected ≥12 unique codes, got {len(codes)}"
