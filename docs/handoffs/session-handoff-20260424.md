@@ -233,3 +233,83 @@
 - [x] SSOT 清單更新：
   - **新增** A 路線 prototype 設計 + 執行紀錄：`docs/superpowers/plans/2026-04-24-fetch-threads-post.md`（晉升正式 CLI 時主控文檔切換）
   - 其餘 SSOT 不變
+
+---
+
+## Session 17:17
+
+### 一、今日聚焦
+
+- 清理 working tree 積壓（0422–0423 未 commit 的 profile_discovery + App Review docs），PR #4 功能實測
+
+### 二、完成事項
+
+- **Working tree 拆 3 批**：
+  - Batch 1 → commit `d34b010` 上 `feat/fetch-threads-post`：3 份 handoff（0422/0423/0424）+ `docs/lessons/` 2 份 + `.gitignore` 加 `.reference/`
+  - Batch 2 → 新 branch `feat/profile-discovery`（從 main 拉）2 commits 推 origin：`76ca758` feat(profile) + `e682c06` docs(app-review)
+  - 垃圾 → `.reference/` 23MB PDF + page images 直接 gitignore，不 commit
+  - `batch-a-lessons.md` 改動是 typo + formatter 噪音，revert 掉
+- **PR #4 功能實測 6 項全綠**：
+  - 單元測試 `tests/test_fetch_threads_post.py` 37/37
+  - 全 repo `pytest` 229/229
+  - Default run（A+B）：counts `{A:1,B:1,C:4,D:6,E:0}` = 12，kept 2（= 0424 13:15 anchor 精確命中）
+  - `--include-replies`：kept 8（+D 6）
+  - `--include-replies --include-self-replies`：kept 12（+C 4 +D 6）
+  - Bad URL：stderr ERROR + exit 1
+- **實戶實測**：抓 `@addisonaithinking/post/DXamvEgE1D2`（ChatGPT 生圖模板懶人包）
+  - total 26 / counts `{A:1,B:6,C:0,D:19,E:0}`
+  - 預設 kept 7 = A + 6 B（主文 + 5 模板 + 成果），作者觀點一次收齊
+  - `--include-replies` kept 26：D 的 19 則讀者回覆全抓進來
+
+### 三、洞見紀錄
+
+- **「模板包型貼文」的典型讀者反應 = 100% save 行為**：addisonaithinking 那篇 19 則讀者回覆裡，17 則只是「留 / 留己看 / 存 / 筆記」，沒有任何 dialogue / 問題 / 辯論。演算法上拿到大量 save 但對話深度為零——這類內容擴散強、收藏強，但 community-building 效果有限。**對 advisor 的啟示**：如果目標是觸及 + 被收藏，複製這結構；如果目標是對話 + 信任，這格式不對。未來若要做 lesson 檔可引此例。
+- **未 commit 積壓會越滾越大**：0422 handoff + 0423 profile_discovery 一整套（CLI + 34 tests + 8 份 app-review 文件）全卡在 working tree 快兩天沒動，切 feature branch 時差點被塞進錯的 PR scope。**規則**：session 尾聲檢查 `git status`，不屬於當前 branch 的變更立刻切 branch 或 stash 標註歸屬。
+
+### 四、阻塞/卡點
+
+- 無
+
+### 五、行動複盤
+
+- **分類 working tree 應該先做、再寫 commit**：今天先花時間把 3 批檔案用 diff 逐個分類（哪些是 batch 1 的 handoff、哪些是 batch 2 的 profile、哪些是純噪音），再動 commit。省掉「commit 完才發現塞錯分支」的災難。未來遇到「working tree 一團亂」情境，這模式可直接套用。
+- **實戶實測可以一次 confirm 兩件事**：(1) 工具 functional OK，(2) 工具產出的素材真的有學習價值。原本只打算驗第 1 項，意外在實測中長出「模板包 = 100% save」的洞見，是免費 bonus。
+
+### 六、檔案異動
+
+**修改（batch 1 / 已 commit `d34b010`）**：
+- `.gitignore`（加 `.reference/`）
+- `docs/handoffs/session-handoff-20260423.md`（append 0423 18:07 Playwright 探索區塊，早餐 session 已寫）
+- `docs/handoffs/session-handoff-20260424.md`（append 本 Session 17:17 區塊）
+
+**新增（batch 1 / 已 commit `d34b010`）**：
+- `docs/handoffs/session-handoff-20260422.md`（補 commit，原本 untracked）
+- `docs/lessons/agent-first-tooling.md`、`docs/lessons/data-is-information.md`
+
+**Batch 2 / `feat/profile-discovery` branch（已推 origin，未開 PR）**：
+- `76ca758` feat(profile)：`threads_client.py` +168 / `threads_cli/profile.py` 新 / `threads_cli/cli.py` +2 / `skills/threads-cli/SKILL.md` +2 / `tests/test_threads_client.py` +17 / `tests/test_threads_client_profile.py` 新 / `tests/test_cli_profile.py` 新 / `scripts/probe_profile_discovery.py` 新
+- `e682c06` docs(app-review)：`resubmission-plan.md` +121 + 6 份 demo script + `recording-checklist.md` + `submission-notes.md`
+
+**本 session 新增的實戶實測素材**（drafts/ gitignored、本地保留）：
+- `drafts/library/2026-04-24_addisonaithinking_DXamvEgE1D2/`（post.md 5.8KB + meta.json + relay.json + screenshot.png）
+
+**Revert（噪音）**：
+- `docs/dev/batch-a-lessons.md`（原本 working tree 的改動只有一個 typo + formatter 表格重排，checkout 回 HEAD）
+
+### 七、收工回寫
+
+- [x] Memory 更新：`project_progress_20260424.md` append「Session 17:17 — working tree 清理 + PR #4 功能實測 OK」段落
+- [x] `MEMORY.md` 索引：0424 條目已存在，無需新增
+- [x] **3 個 branch 狀態**：
+  - `feat/fetch-threads-post`：11 commits ahead of main（10 A 路線 + 1 batch 1 handoff），PR #4 open
+  - `feat/profile-discovery`：2 commits ahead of main，branch 推上 origin，**尚未建 PR**（等 B 路線討論後再決定）
+  - `feat/advisor-plan`：原狀（C 路線等實測再動）
+- [ ] **下次 session next action（linear）**：
+  - **P0**. PR #4 決定：自 merge / 等 review / 先擱
+  - **P1**. `feat/profile-discovery` branch 決定：開 PR / 保留 / 併進 B 路線送審動作
+  - **P2**（3 選 1）：
+    - A 路線續攻：PR #4 merge 後晉升正式 CLI（`threads fetch`、images 下載、og:description fallback、嚴謹 regression）
+    - B 路線：錄 `profile_discovery.mp4` Plan B + Stage 5 送審
+    - C 路線：實測 `threads-angle-gate` skill / 第 2 層 `planner.py` / merge `feat/advisor-plan`
+  - **P3**. 清理 `threads-kanisleo-post.png` 與 `.playwright-cli/`（持續待辦）
+- [x] SSOT 清單（本 session 不變）
