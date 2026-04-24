@@ -5,9 +5,12 @@ data/
 
 # App Review 申請文件（含個人證件、營登、錄影）
 app-review-docs/
+assets/app-review/
 
 # Playwright
 .playwright-mcp/
+.playwright-cli/
+threads-*.png
 
 # Claude
 .claude/

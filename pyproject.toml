@@ -24,6 +24,9 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
 ]
+prototype = [
+    "playwright>=1.40",
+]
 
 [project.scripts]
 threads-advisor      = "threads_pipeline.advisor:main"
