@@ -216,3 +216,23 @@ def write_output(
         (out_dir / "screenshot.png").write_bytes(screenshot)
 
     return out_dir
+
+
+def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
+    """Load `url` via headless chromium and return (html, screenshot_bytes_or_None).
+
+    Anonymous browsing — no cookies, no login. Waits for `networkidle` (≤30s).
+    """
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            ctx = browser.new_context(viewport={"width": 1280, "height": 2000})
+            page = ctx.new_page()
+            page.goto(url, wait_until="networkidle", timeout=30_000)
+            html = page.content()
+            shot = page.screenshot(full_page=False) if screenshot else None
+            return html, shot
+        finally:
+            browser.close()
