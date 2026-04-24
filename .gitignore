@@ -39,3 +39,6 @@ docs/superpowers/
 
 # Delete backup directory (批次 B2 — 本地備份，不進版控)
 .deleted_posts/
+
+# 外部參考資料（課程 PDF、其他人的 repo、暫存 PDF 圖片 — 不對外）
+.reference/
