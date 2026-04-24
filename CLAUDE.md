@@ -68,6 +68,10 @@ threads account mentions
 threads account mentions --json --limit 50
 threads post publish-chain drafts/smoke-test.txt --confirm --yes
 
+# profile_discovery（App Review 2026-04-23 送審中；endpoint pre-approval 回 400）
+threads profile lookup https://www.threads.com/@username/post/SHORTCODE
+threads profile posts username --limit 10
+
 # 每日 pipeline（不 CLI 化）
 $env:PYTHONUTF8=1; python -m threads_pipeline.main   # PowerShell
 PYTHONUTF8=1 python -m threads_pipeline.main          # bash
@@ -156,6 +160,7 @@ Currently using Standard Access for `threads_keyword_search` — search results 
 
 - **threads-algorithm-skill** (`/threads-algorithm-skill`) — Threads/Meta 社群經營顧問，基於 26 個 Meta 演算法專利機制，提供內容策略建議。來源：`azuma520/threads-algorithm-skill`
 - **threads-cli** — `threads` CLI 與 `threads-advisor` 操作手冊。Agent 執行 Threads 帳號操作（發文、查數據、刪文、審查草稿）時自動參考。Skill 檔案：`skills/threads-cli/SKILL.md`
+- **threads-angle-gate** — C 路線第 1 層「選角度 Gate」草案。使用者要寫 Threads 貼文但還沒想清楚切入點時用；訪談者+共創者模式，AI 只用「發問」和「總結+詢問」兩種發言形式，產出 `drafts/<slug>.angle.md`。Skill 檔案：`skills/threads-angle-gate/SKILL.md`
 
 ## Dependencies
 
