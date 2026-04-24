@@ -11,6 +11,7 @@ Output: drafts/library/{YYYY-MM-DD}_{author}_{code}/{post.md, meta.json, screens
 from __future__ import annotations
 
 import json
+import pathlib
 import re
 
 
@@ -176,3 +177,42 @@ def render_markdown(
             lines.append("")
 
     return "\n".join(lines)
+
+
+def write_output(
+    out_root: pathlib.Path,
+    meta: dict,
+    markdown: str,
+    relay_payload: dict,
+    screenshot: bytes | None,
+) -> pathlib.Path:
+    """Write post.md / meta.json / relay.json / screenshot.png into
+    `out_root/{date}_{author}_{code}/`.
+
+    Returns the directory path. `fetched_at` must be an ISO 8601 timestamp
+    whose first 10 chars form the date prefix.
+
+    B1 note: meta.json contains the summary only (author/code/url/fetched_at/
+    counts/kept/segments). The raw Relay payload is written to `relay.json` as
+    a sibling, keeping meta.json human-readable and small.
+    """
+    date = meta["fetched_at"][:10]
+    out_dir = out_root / f"{date}_{meta['author']}_{meta['code']}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    (out_dir / "post.md").write_text(markdown, encoding="utf-8")
+
+    (out_dir / "meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    (out_dir / "relay.json").write_text(
+        json.dumps(relay_payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    if screenshot:
+        (out_dir / "screenshot.png").write_bytes(screenshot)
+
+    return out_dir

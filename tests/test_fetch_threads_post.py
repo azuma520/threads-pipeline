@@ -315,3 +315,53 @@ class TestRenderMarkdown:
         item = ({"code": "x", "caption": {}, "user": {"username": "foo"}, "taken_at": 1}, "A")
         md = ftp.render_markdown([item], self.META)
         assert "[A] @foo" in md  # does not crash, renders empty body
+
+
+class TestWriteOutput:
+    META = {
+        "author": "foo",
+        "code": "c1",
+        "url": "https://www.threads.com/@foo/post/c1",
+        "fetched_at": "2026-04-24T10:00:00+00:00",
+        "counts": {"A": 1, "B": 0, "C": 0, "D": 0, "E": 0},
+        "kept": 1,
+        "segments": [
+            {"code": "c1", "class": "A", "author": "foo", "taken_at": 100},
+        ],
+    }
+
+    def test_writes_all_four_files(self, tmp_path):
+        out = ftp.write_output(
+            tmp_path, self.META, "# md body", {"relay": "payload"}, b"png-bytes"
+        )
+        assert out.parent == tmp_path
+        assert out.name == "2026-04-24_foo_c1"
+        assert (out / "post.md").read_text(encoding="utf-8") == "# md body"
+        assert (out / "screenshot.png").read_bytes() == b"png-bytes"
+
+        meta_parsed = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+        assert meta_parsed["author"] == "foo"
+        assert meta_parsed["segments"][0]["class"] == "A"
+        # B1: relay raw payload MUST NOT leak into meta.json
+        assert "relay" not in meta_parsed
+
+        relay_parsed = json.loads((out / "relay.json").read_text(encoding="utf-8"))
+        assert relay_parsed == {"relay": "payload"}
+
+    def test_skips_screenshot_when_none(self, tmp_path):
+        out = ftp.write_output(tmp_path, self.META, "# x", {}, None)
+        assert not (out / "screenshot.png").exists()
+        # 仍要寫 post.md、meta.json、relay.json
+        assert (out / "post.md").exists()
+        assert (out / "meta.json").exists()
+        assert (out / "relay.json").exists()
+
+    def test_creates_parent_dirs(self, tmp_path):
+        nested = tmp_path / "a" / "b"
+        out = ftp.write_output(nested, self.META, "# x", {}, None)
+        assert out.parent == nested
+        assert (out / "post.md").exists()
+
+    def test_relay_json_can_be_empty_dict(self, tmp_path):
+        out = ftp.write_output(tmp_path, self.META, "# x", {}, None)
+        assert json.loads((out / "relay.json").read_text(encoding="utf-8")) == {}
