@@ -129,3 +129,17 @@ def extract_relay_json(html: str) -> dict | None:
             best = parsed
             best_count = count
     return best
+
+
+def filter_by_flags(
+    posts_with_class: list[tuple[dict, str]],
+    include_replies: bool,
+    include_self_replies: bool,
+) -> list[tuple[dict, str]]:
+    """Filter classified posts. Default keeps A + B only. E is always dropped."""
+    kept = {"A", "B"}
+    if include_replies:
+        kept.add("D")
+    if include_self_replies:
+        kept.add("C")
+    return [(p, c) for p, c in posts_with_class if c in kept]

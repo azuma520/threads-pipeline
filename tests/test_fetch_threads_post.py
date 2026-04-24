@@ -241,3 +241,29 @@ class TestExtractRelayJson:
             '</body></html>'
         )
         assert ftp.extract_relay_json(html) is None
+
+
+class TestFilterByFlags:
+    ITEMS = [
+        ({"code": "a1"}, "A"),
+        ({"code": "b1"}, "B"),
+        ({"code": "c1"}, "C"),
+        ({"code": "d1"}, "D"),
+        ({"code": "e1"}, "E"),
+    ]
+
+    def test_default_keeps_a_b_only(self):
+        out = ftp.filter_by_flags(self.ITEMS, include_replies=False, include_self_replies=False)
+        assert [p["code"] for p, _ in out] == ["a1", "b1"]
+
+    def test_include_replies_adds_d(self):
+        out = ftp.filter_by_flags(self.ITEMS, include_replies=True, include_self_replies=False)
+        assert [p["code"] for p, _ in out] == ["a1", "b1", "d1"]
+
+    def test_include_self_replies_adds_c(self):
+        out = ftp.filter_by_flags(self.ITEMS, include_replies=False, include_self_replies=True)
+        assert [p["code"] for p, _ in out] == ["a1", "b1", "c1"]
+
+    def test_e_is_always_dropped(self):
+        out = ftp.filter_by_flags(self.ITEMS, include_replies=True, include_self_replies=True)
+        assert all(cls != "E" for _, cls in out)
