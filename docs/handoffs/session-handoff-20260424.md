@@ -130,6 +130,11 @@
 
 - [x] Memory 建立：`project_progress_20260424.md`（本 session 完成）
 - [x] `MEMORY.md` 索引同步（加 0424 條目）
+- [x] **兩個 commit 上 origin/main**：
+  - `1f45974` feat(skills): add threads-angle-gate skill
+  - `f47bcdb` docs(dev): threads-angle-gate optimization roadmap + session handoff
+  - 走 PR #3（feat/fetch-threads-post → main），含本 session + 另一個 shell 的 Playwright prototype 共 6 commits，已 merge（main tip `2047715`）
+  - PR #1（feat/advisor-plan）仍照決策 B 保持 open，等 C 路線全層想清楚再動
 - [ ] **下次 session next action（linear）**：
   - **P0**. 實測 `threads-angle-gate` skill：找一個真實要發的題目走一遍，看對話體感如何；可能需要再 refactor
   - **P1**. 選做（3 選 1）：
@@ -141,3 +146,90 @@
   - App Review：`docs/app-review/resubmission-plan.md`
   - C 路線：`docs/dev/ak-threads-booster-research.md`
   - **新增** C 路線第 1 層 skill：`skills/threads-angle-gate/SKILL.md`
+
+---
+
+## Session 13:15
+
+### 一、今日聚焦
+
+- 主線 A：`scripts/fetch_threads_post.py` prototype 實作（0423 18:07 Playwright + Relay JSON 設計落地）
+- 全程走 superpowers 機制：writing-plans → review-spec（第三方審查 2 輪）→ subagent-driven-development → finishing-a-development-branch
+
+### 二、完成事項
+
+- 寫計畫 `docs/superpowers/plans/2026-04-24-fetch-threads-post.md`（~1200 行，11 Task TDD）
+- **第三方審查 2 輪**（`sd0x-dev-flow:review-spec` / tech-spec-reviewer subagent）：
+  - Revision 0→1：修 B1（meta 肥大）+ I1（walk_posts 假陽性）+ I2（真 fixture anchor）+ I3（regex 屬性序）+ I4（extract 失敗 debug dump）+ I5（classify 缺欄位語義）+ N1/N3/N4 cosmetic
+  - Revision 1 re-review：**Approved** + 3 個 cosmetic fix
+- **Subagent-driven 執行**（11 subagent 派發：10 implementer + 4 spec-reviewer）：
+  - Task 0 setup + fixture（抓 `@kanisleo328/post/DXO2PlPEoOQ` 真 Relay payload，78KB）
+  - Task 1–9：parse_url / classify / walk_posts / extract_relay_json / filter_by_flags / render_markdown / write_output / fetch_page / main orchestrator
+  - Task 10：真 URL end-to-end smoke
+- **產出**：
+  - `scripts/fetch_threads_post.py`（~180 行）
+  - `tests/test_fetch_threads_post.py`（37 tests）
+  - `tests/fixtures/relay_kanisleo_DXO2PlPEoOQ.json`（78KB schema-drift regression anchor）
+- **全 repo 264 tests 綠**（baseline 227 + 新 37）
+- **End-to-end smoke**：真 URL counts `{A:1, B:1, C:4, D:6, E:0}` = 12（handoff 0423 18:07-D 精確命中），`--include-replies` [D] 0→6、URL 解析錯 → exit 1、I4 debug dump 手動觸發驗 marker 還原
+- **12 commits 上 origin/feat/fetch-threads-post + PR #4 建立**：https://github.com/azuma520/threads-pipeline/pull/4
+
+### 三、洞見紀錄
+
+- **「計畫的 schema 假設」必須實測驗證**：原計畫依 0423 18:07-C 假設 `is_reply` 在 post root，Task 0 subagent 抓真 fixture 實測發現巢在 `post["text_post_app_info"]`。純合成測試不會抓到欄位巢狀錯誤——**真 fixture anchor 是必要投資**。
+- **「第一個含 marker 的 script」是 SSR SPA 的常見陷阱**：Meta Threads 頁面 7 支 data-sjs 都含 `BarcelonaPostPageDirectQuery`，只 1 支真含貼文 records（其他是 query 定義 / cache reference / metadata）。選擇邏輯必須走語義（對所有 candidate 跑 `walk_posts` 計數取最大），不能走詞法匹配（first hit）。此經驗可通用到抓其他 React/Next.js SSR 頁面。
+- **Subagent-driven two-stage review > inline 實作**：fresh context per Task、implementer 不會自證、reviewer 獨立驗 git log + 跑 pytest + runtime assert。例 Task 3 reviewer 自己跑 `all("pk" in p for p in posts)` 驗 guard 真生效——這層我自己跑過可能漏。
+- **第三方審查是便宜高 leverage 投資**：2 輪 tech-spec review ≈ 20 分鐘，抓到 1 Blocker + 5 Improvements，省了至少兩次大重構。
+- **實測發現 schema 漏洞時正確做法**：「改計畫 → 再派 subagent」不是「直接 in-place 修代碼」。Task 0 subagent 正確 BLOCKED + 提供 diagnostic，我更新計畫（walk guard `is_reply` → `pk`、classify 改讀巢狀）再派第 3 subagent 才順利。保持計畫為 SSOT。
+- **Pyright stale hints 在 TDD 漸進檔常見**：`import json` / `import pathlib` / `import argparse` 分 Task 加入時 Pyright 報 "not accessed"，後續 Task 才消化——收 diagnostic 要看上下文，不無腦修。
+
+### 四、阻塞/卡點
+
+- 無
+
+### 五、行動複盤
+
+- **superpowers 全流程跑一次值得**：writing-plans + 2 輪審查 + subagent-driven + finishing 全走完約 3–4 小時，但省了至少兩次大重構（B1 meta 肥大 / walk_posts 假陽性 / schema 巢狀都會在執行後才炸）。
+- **Subagent prompt 必須明寫「branch check first」**：Task 3 有 subagent 開局在 main，差點留 stray file；Task 4+ 都明寫就沒事。
+- **TDD 的 RED state 不可跳**：每個 Task subagent 先跑 pytest 確認 `AttributeError` 再 impl，這機械紀律讓「測試真的跑過」有硬證據，不是「我以為測試會紅」的自證。
+- **rate limit 不影響工作流**：中途 `superpowers:code-reviewer` agent 撞 limit，inline 輕量 review 補位即可，不需改流程。
+
+### 六、檔案異動
+
+**新增**：
+- `scripts/fetch_threads_post.py`（~180 行）
+- `tests/test_fetch_threads_post.py`（37 tests）
+- `tests/fixtures/relay_kanisleo_DXO2PlPEoOQ.json`（78KB）
+- `docs/superpowers/plans/2026-04-24-fetch-threads-post.md`（~1200 行，Revision 1 含審查修正）
+
+**修改**：
+- `pyproject.toml`（新增 `[project.optional-dependencies].prototype = ["playwright>=1.40"]`）
+- `.gitignore`（加 `.playwright-cli/`、`threads-*.png`）
+- `docs/handoffs/session-handoff-20260424.md`（本區塊）
+
+**未動**：
+- 0423 handoff（不回改）
+- C 路線所有檔案（`docs/dev/ak-threads-booster-research.md`、`skills/threads-angle-gate/`、roadmap）
+- App Review 檔案
+- 既有代碼（`threads_client.py`、`threads_cli/`、`threads_pipeline` 等）
+
+**仍待清理（P2 持續）**：
+- `threads-kanisleo-post.png`（已加 `.gitignore` glob 掩蓋，未實刪）
+- `.playwright-cli/`（同上）
+
+### 七、收工回寫
+
+- [x] 12 commit 推上 `origin/feat/fetch-threads-post`（`01de228`..`295bede`）
+- [x] PR #4 建立：https://github.com/azuma520/threads-pipeline/pull/4
+- [x] Memory 更新：`project_progress_20260424.md` append「Session 13:15 — A 路線 prototype 完工」段落
+- [x] `MEMORY.md` 索引：0424 條目已存在，無需新增
+- [ ] **下次 session next action（linear）**：
+  - **P0**. 決定 PR #4 下一步（等 review / 自 merge / 先不動）
+  - **P1**（3 選 1）：
+    - A 路線續攻：PR #4 merge 後晉升 `threads library fetch`（typer 整合、`images/` 下載、og:description fallback、更嚴謹 regression）
+    - B 路線：錄 `profile_discovery.mp4` Plan B + Stage 5 送審
+    - C 路線：實測 `threads-angle-gate` skill / 第 2 層 `planner.py` / merge `feat/advisor-plan`
+  - **P2**. 清理 `threads-kanisleo-post.png` 與 `.playwright-cli/`（仍持續）
+- [x] SSOT 清單更新：
+  - **新增** A 路線 prototype 設計 + 執行紀錄：`docs/superpowers/plans/2026-04-24-fetch-threads-post.md`（晉升正式 CLI 時主控文檔切換）
+  - 其餘 SSOT 不變
