@@ -42,3 +42,6 @@ docs/superpowers/
 
 # 外部參考資料（課程 PDF、其他人的 repo、暫存 PDF 圖片 — 不對外）
 .reference/
+
+# 歸檔區（本地暫存；待 user 手動清）
+.archive/
