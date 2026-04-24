@@ -33,3 +33,49 @@ class TestParseUrl:
     def test_invalid_raises(self):
         with pytest.raises(ValueError):
             ftp.parse_url("https://example.com/not-threads")
+
+
+class TestClassify:
+    MAIN = "kanisleo328"
+
+    def _mk(self, is_reply, author, reply_to=None):
+        # Schema 實測：is_reply / reply_to_author 皆巢在 text_post_app_info 裡。
+        info = {"is_reply": is_reply}
+        if reply_to:
+            info["reply_to_author"] = {"username": reply_to}
+        return {
+            "user": {"username": author},
+            "text_post_app_info": info,
+        }
+
+    def test_a_main_post(self):
+        assert ftp.classify(self._mk(False, self.MAIN), self.MAIN) == "A"
+
+    def test_b_author_thread_extension(self):
+        assert ftp.classify(self._mk(True, self.MAIN, self.MAIN), self.MAIN) == "B"
+
+    def test_c_author_replies_commenter(self):
+        assert ftp.classify(self._mk(True, self.MAIN, "someone_else"), self.MAIN) == "C"
+
+    def test_d_other_user_top_level_reply(self):
+        assert ftp.classify(self._mk(True, "bob", self.MAIN), self.MAIN) == "D"
+
+    def test_e_deep_reply(self):
+        assert ftp.classify(self._mk(True, "bob", "alice"), self.MAIN) == "E"
+
+    def test_missing_reply_to_author_treated_as_e(self):
+        # is_reply=True but no reply_to_author → cannot classify → E
+        post = {
+            "user": {"username": "bob"},
+            "text_post_app_info": {"is_reply": True},
+        }
+        assert ftp.classify(post, self.MAIN) == "E"
+
+    def test_missing_is_reply_key_treated_as_a(self):
+        # I5: commit to prototype behavior — absent is_reply → "A"（與明文 False 同）。
+        # 包含 text_post_app_info 不存在、或存在但缺 is_reply 兩種情境。
+        assert ftp.classify({"user": {"username": self.MAIN}}, self.MAIN) == "A"
+        assert ftp.classify(
+            {"user": {"username": self.MAIN}, "text_post_app_info": {}},
+            self.MAIN,
+        ) == "A"
