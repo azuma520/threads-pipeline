@@ -1,6 +1,7 @@
 """Threads API 封裝：關鍵字搜尋、去重、時間過濾、Token 管理。"""
 
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -89,7 +90,13 @@ def _search_keyword(
 def _request_with_retry(
     url: str, params: dict, max_retries: int = 3
 ) -> dict:
-    """GET 請求，指數退避重試。"""
+    """GET with exponential backoff.
+
+    4xx client errors raise immediately (no retry, no URL logged — avoids
+    leaking access_token into logs / recordings). 5xx and network errors
+    retry with backoff; log messages strip the `" for url: ..."` suffix
+    that `requests` appends (which would otherwise expose the token).
+    """
     session = requests.Session()
 
     for attempt in range(max_retries):
@@ -98,19 +105,38 @@ def _request_with_retry(
 
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", 2 ** attempt))
-                logger.warning("Rate limited, 等待 %ds...", retry_after)
+                logger.warning("Rate limited, waiting %ds...", retry_after)
                 time.sleep(retry_after)
                 continue
 
+            if 400 <= resp.status_code < 500:
+                resp.raise_for_status()
+
             resp.raise_for_status()
             return resp.json()
+
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else 0
+            if status and 400 <= status < 500:
+                raise
+            if attempt == max_retries - 1:
+                raise
+            wait = 2 ** attempt
+            logger.warning(
+                "Server error (attempt %d/%d): HTTP %d, waiting %ds",
+                attempt + 1, max_retries, status, wait,
+            )
+            time.sleep(wait)
 
         except requests.exceptions.RequestException as e:
             if attempt == max_retries - 1:
                 raise
             wait = 2 ** attempt
-            logger.warning("請求失敗 (attempt %d/%d): %s, 等待 %ds",
-                           attempt + 1, max_retries, e, wait)
+            msg = str(e).split(" for url:")[0]
+            logger.warning(
+                "Request failed (attempt %d/%d): %s, waiting %ds",
+                attempt + 1, max_retries, msg, wait,
+            )
             time.sleep(wait)
 
     return {"data": []}
@@ -312,6 +338,140 @@ def delete_post(post_id: str, token: str) -> bool:
     resp = requests.delete(url, params=params, timeout=30)
     resp.raise_for_status()
     return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# profile_discovery helpers（App Review 2026-04-23 本輪送審範圍）
+#
+# 注意：`/{username}` 與 `/{username}/threads` 在 `threads_profile_discovery`
+# 核准前**完全鎖住**（即使對 app owner 自己的 username 亦同），實測回 HTTP 400
+# `Object with ID '<username>' does not exist, cannot be loaded due to missing
+# permissions`。核准後才可用於跨帳號讀取。
+#
+# 本批 helper 為前瞻實作：單元測試用 mock，無 live smoke 可跑；demo 影片走
+# Architecture-Demo 並誠實展示這個 400 錯誤（見 docs/app-review/
+# demo-script-profile-discovery.md Plan B Step 6）。
+# ═══════════════════════════════════════════════════════════════════════════
+
+_DEFAULT_PROFILE_FIELDS = "id,username,threads_biography,threads_profile_picture_url"
+_DEFAULT_USER_THREADS_FIELDS = "id,text,permalink,timestamp,username"
+
+
+def fetch_user_profile(username: str, token: str) -> dict:
+    """GET /{username} — 讀他人（或自己）的 Threads profile 基本資料。
+
+    Args:
+        username: Threads username（不含 @ 符號）。
+        token: Access token。
+
+    Returns:
+        API dict，含 id / username / threads_biography 等欄位。
+
+    Raises:
+        requests.exceptions.HTTPError: 4xx / 5xx。**核准前對任何 username 都會回
+            HTTP 400**（endpoint 本身 permission-gated）。
+        requests.exceptions.RequestException: 網路 / timeout。
+    """
+    url = f"{THREADS_API_BASE}/{username}"
+    params = {
+        "access_token": token,
+        "fields": _DEFAULT_PROFILE_FIELDS,
+    }
+    return _request_with_retry(url, params)
+
+
+def fetch_user_threads(
+    username: str,
+    token: str,
+    limit: int = 25,
+    cursor: str | None = None,
+) -> dict:
+    """GET /{username}/threads — 列他人（或自己）的公開貼文，支援分頁。
+
+    Args:
+        username: Threads username（不含 @）。
+        token: Access token。
+        limit: 單次回傳數量（Threads API 上限 100，呼叫端已 clamp）。
+        cursor: 分頁 cursor；若有則傳 `after`。
+
+    Returns:
+        {"posts": [...], "next_cursor": str | None}。格式對齊 list_my_posts。
+
+    Raises:
+        requests.exceptions.HTTPError: 同 fetch_user_profile，核准前會 400。
+        requests.exceptions.RequestException: 網路 / timeout。
+    """
+    url = f"{THREADS_API_BASE}/{username}/threads"
+    params: dict = {
+        "access_token": token,
+        "limit": limit,
+        "fields": _DEFAULT_USER_THREADS_FIELDS,
+    }
+    if cursor:
+        params["after"] = cursor
+    data = _request_with_retry(url, params)
+    next_cursor = data.get("paging", {}).get("cursors", {}).get("after")
+    return {"posts": data.get("data", []), "next_cursor": next_cursor}
+
+
+# URL → (username, shortcode) 解析
+# 主要支援：https://www.threads.com/@{username}/post/{shortcode}
+# 也支援：threads.net（舊域名）、無 www、有 trailing slash / query string
+_THREADS_URL_RE = re.compile(
+    r"^https?://(?:www\.)?threads\.(?:com|net)/@([^/?#]+)/post/([A-Za-z0-9_-]+)(?:[/?#].*)?$",
+    re.IGNORECASE,
+)
+
+
+def parse_threads_post_url(url: str) -> tuple[str, str]:
+    """解析 Threads post URL → (username, shortcode)。
+
+    Raises:
+        ValueError: URL 格式不符。短格式 `threads.com/t/{shortcode}` 不含
+            username，無法透過 profile_discovery 解析，此函式會 raise。
+    """
+    m = _THREADS_URL_RE.match(url.strip())
+    if not m:
+        raise ValueError(
+            "URL must be in form `https://www.threads.com/@username/post/shortcode`"
+        )
+    return m.group(1), m.group(2)
+
+
+def resolve_post_by_url(url: str, token: str, search_limit: int = 25) -> dict:
+    """URL-first helper：用 URL 找到對應 post dict（含 text）。
+
+    流程：
+        1. parse URL → (username, shortcode)
+        2. GET /{username}/threads?limit=search_limit
+        3. 在回傳列表中匹配 permalink 包含 shortcode 的 post
+        4. 回傳該 post dict
+
+    Args:
+        url: Threads post 公開 URL。
+        token: Access token。
+        search_limit: 列表查詢量；shortcode 不在最近 N 則會回 LookupError。
+
+    Returns:
+        匹配到的 post dict（含 id / text / permalink / timestamp / username）。
+
+    Raises:
+        ValueError: URL 格式不符（見 parse_threads_post_url）。
+        LookupError: URL 解析成功但 shortcode 不在該 user 最近 search_limit
+            則貼文中。
+        requests.exceptions.HTTPError: Graph API 4xx/5xx，含核准前必然的 400。
+        requests.exceptions.RequestException: 網路 / timeout。
+    """
+    username, shortcode = parse_threads_post_url(url)
+    result = fetch_user_threads(username, token, limit=search_limit)
+    for post in result["posts"]:
+        permalink = post.get("permalink") or ""
+        if shortcode in permalink:
+            return post
+    raise LookupError(
+        f"Post shortcode `{shortcode}` not found in `{username}`'s recent "
+        f"{search_limit} posts"
+    )
 
 
 def hide_reply(reply_id: str, token: str, hide: bool = True) -> bool:

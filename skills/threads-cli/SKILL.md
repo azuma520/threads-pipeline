@@ -34,6 +34,8 @@ description: "How to use the `threads` CLI and `threads-advisor` tools to operat
 | `threads reply hide <reply_id>` | 隱藏某則回覆 | 是 | 否 |
 | `threads reply unhide <reply_id>` | 取消隱藏某則回覆 | 是 | 否 |
 | `threads account mentions` | 查看 @mentions（我被提及的貼文） | 否 | 有 |
+| `threads profile lookup <URL>` | URL → 讀他人公開貼文 text（學習用）⚠️ 需 `profile_discovery` 核准 | 否 | 有 |
+| `threads profile posts <username>` | 列某帳號公開貼文 ⚠️ 需 `profile_discovery` 核准 | 否 | 有 |
 | `threads post delete <post_id>` | 刪除貼文 | 是 | 有 |
 
 ### threads-advisor（AI 顧問）

@@ -15,6 +15,7 @@ from threads_pipeline.threads_cli.post import post_app
 from threads_pipeline.threads_cli.posts import posts_app
 from threads_pipeline.threads_cli.account import account_app
 from threads_pipeline.threads_cli.reply import reply_app
+from threads_pipeline.threads_cli.profile import profile_app
 
 app = typer.Typer(
     name="threads",
@@ -27,6 +28,7 @@ app.add_typer(post_app, name="post")
 app.add_typer(posts_app, name="posts")
 app.add_typer(account_app, name="account")
 app.add_typer(reply_app, name="reply")
+app.add_typer(profile_app, name="profile")
 
 
 def _version_callback(value: bool):

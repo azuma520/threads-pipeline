@@ -154,6 +154,23 @@ class TestRequestWithRetry:
         with pytest.raises(requests.exceptions.HTTPError):
             _request_with_retry("http://test.com", {}, max_retries=3)
 
+    @patch("time.sleep")
+    @patch("requests.Session.get")
+    def test_no_retry_on_4xx(self, mock_get, mock_sleep):
+        """4xx 立刻拋出，不重試（避免 access_token 被多次 log 外洩）。"""
+        fail_resp = MagicMock()
+        fail_resp.status_code = 400
+        http_err = requests.exceptions.HTTPError("400 Bad Request")
+        http_err.response = fail_resp
+        fail_resp.raise_for_status.side_effect = http_err
+        mock_get.return_value = fail_resp
+
+        with pytest.raises(requests.exceptions.HTTPError):
+            _request_with_retry("http://test.com", {}, max_retries=3)
+
+        assert mock_get.call_count == 1
+        assert mock_sleep.call_count == 0
+
 
 class TestValidateToken:
     """validate_token 測試。"""
