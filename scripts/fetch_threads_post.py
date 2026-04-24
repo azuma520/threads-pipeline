@@ -10,9 +10,12 @@ Output: drafts/library/{YYYY-MM-DD}_{author}_{code}/{post.md, meta.json, screens
 """
 from __future__ import annotations
 
+import argparse
+import datetime
 import json
 import pathlib
 import re
+import sys
 
 
 _URL_RE = re.compile(
@@ -236,3 +239,96 @@ def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
             return html, shot
         finally:
             browser.close()
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Fetch a Threads post + classified threads/replies into drafts/library/"
+    )
+    ap.add_argument("url", help="Threads post URL (https://www.threads.com/@user/post/CODE)")
+    ap.add_argument(
+        "--include-replies",
+        action="store_true",
+        help="Include other users' top-level replies (class D)",
+    )
+    ap.add_argument(
+        "--include-self-replies",
+        action="store_true",
+        help="Include author's replies to commenters (class C)",
+    )
+    ap.add_argument("--no-screenshot", action="store_true", help="Skip page screenshot")
+    ap.add_argument(
+        "--out",
+        type=pathlib.Path,
+        default=pathlib.Path("drafts/library"),
+        help="Output root (default: drafts/library)",
+    )
+    args = ap.parse_args(argv)
+
+    try:
+        username, code = parse_url(args.url)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Fetching {args.url} ...", file=sys.stderr)
+    html, shot = fetch_page(args.url, screenshot=not args.no_screenshot)
+
+    relay = extract_relay_json(html)
+    if relay is None:
+        # I4: Meta schema drift detection signal.
+        debug_dir = args.out / "_debug"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+        debug_file = debug_dir / f"{ts}_{code}_nomatch.html"
+        debug_file.write_text(html[:500_000], encoding="utf-8")
+        print(
+            f"ERROR: could not find {_RELAY_QUERY_MARKER} in page HTML. "
+            f"Dumped first 500KB to {debug_file} for inspection.",
+            file=sys.stderr,
+        )
+        return 2
+
+    raw_posts = walk_posts(relay)
+    deduped = {p["code"]: p for p in raw_posts if p.get("code")}
+    posts = list(deduped.values())
+
+    classified = [(p, classify(p, username)) for p in posts]
+    filtered = filter_by_flags(
+        classified,
+        include_replies=args.include_replies,
+        include_self_replies=args.include_self_replies,
+    )
+
+    counts = {c: sum(1 for _, cc in classified if cc == c) for c in "ABCDE"}
+    # B1 / D7: segments 摘要取代把整份 Relay 塞進 meta.json 的舊設計。
+    segments = [
+        {
+            "code": p.get("code"),
+            "class": c,
+            "author": (p.get("user") or {}).get("username"),
+            "taken_at": p.get("taken_at"),
+        }
+        for p, c in classified
+    ]
+    meta = {
+        "author": username,
+        "code": code,
+        "url": args.url,
+        "fetched_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        "counts": counts,
+        "kept": len(filtered),
+        "segments": segments,
+    }
+
+    md = render_markdown(filtered, meta)
+    out_dir = write_output(args.out, meta, md, relay, shot)
+    print(
+        f"Wrote {out_dir} (total: {len(posts)}, kept: {len(filtered)}, counts: {counts})",
+        file=sys.stderr,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
