@@ -432,10 +432,12 @@ created_at: 2026-04-23
 
 ### 仍待決（實作前）
 
-1. **Skill 細部 prompt**：問句範例、總結模板、引導語氣樣本
+1. **Skill 細部 prompt**：問句範例、總結模板、引導語氣樣本 — **2026-04-24 已落地**（`skills/threads-angle-gate/SKILL.md`）
 2. **與 planner.py 介接**：sharpness 怎麼傳給 planner.py 當主軸（環境變數 / argparse / 讀 `.angle.md`？）— 等第 2 層 planner 升級設計時一起決定
 3. **過去貼文資料接入**（讓 AI 帶「使用者風格觀察」進場）：依賴候選點 #1 歷史資料層
 4. **對話紀錄存檔策略**：完整對話可能很長，要不要 truncate？
+
+**第 1 層 skill 後續優化** → 見 `docs/dev/threads-angle-gate-roadmap.md`
 
 ---
 
