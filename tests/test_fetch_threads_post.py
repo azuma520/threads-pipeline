@@ -11,7 +11,7 @@ import pytest
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "scripts"))
 
-import fetch_threads_post as ftp  # noqa: E402
+import fetch_threads_post as ftp  # noqa: E402  # pyright: ignore[reportMissingImports]
 
 
 class TestParseUrl:
