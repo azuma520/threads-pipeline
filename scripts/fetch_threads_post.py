@@ -149,6 +149,18 @@ def filter_by_flags(
     return [(p, c) for p, c in posts_with_class if c in kept]
 
 
+def _extract_snippet(post: dict) -> str:
+    """Extract long-form text from snippet_attachment_info if present.
+
+    Threads stores extended text in text_post_app_info.snippet_attachment_info.
+    text_fragments.fragments[].plaintext. Returns concatenated plaintext or "".
+    """
+    info = (post.get("text_post_app_info") or {})
+    snippet = info.get("snippet_attachment_info") or {}
+    frags = (snippet.get("text_fragments") or {}).get("fragments") or []
+    return "".join(f.get("plaintext", "") for f in frags)
+
+
 def render_markdown(
     posts_with_class: list[tuple[dict, str]],
     meta: dict,
@@ -174,9 +186,15 @@ def render_markdown(
             username = (p.get("user") or {}).get("username", "")
             code = p.get("code", "")
             body = (p.get("caption") or {}).get("text", "") or ""
+            snippet = _extract_snippet(p)
             lines.append(f"## [{cls}] @{username} · {code}")
             lines.append("")
             lines.append(body)
+            if snippet:
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+                lines.append(snippet)
             lines.append("")
 
     return "\n".join(lines)
