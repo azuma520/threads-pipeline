@@ -24,14 +24,33 @@
 - **不發布、不修改、不刪除**任何內容
 - **不存取**任何非公開資料
 
+## 安裝
+
+```bash
+# 方法一：從 GitHub 直接安裝
+pip install git+https://github.com/azuma520/threads-pipeline.git
+
+# 方法二：Clone 後本地安裝（開發用）
+git clone https://github.com/azuma520/threads-pipeline.git
+cd threads-pipeline
+pip install -e ".[dev]"
+```
+
+安裝後會自動註冊以下 CLI 指令：
+- `threads` — Threads API 操作 CLI
+- `threads-advisor` — AI 趨勢顧問
+
 ## 使用方式
 
 ```bash
 # 設定 .env
 THREADS_ACCESS_TOKEN=你的token
 
-# 執行
+# 執行趨勢收集 pipeline
 PYTHONUTF8=1 python -m threads_pipeline.main
+
+# 或透過 CLI 操作單篇貼文
+threads post get <URL>
 ```
 
 ## 架構
