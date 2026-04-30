@@ -1,5 +1,9 @@
 # advisor Path A Pipeline — Artifact Schema + Stage Gate
 
+> ⚠️ **DEPRECATED 2026-04-30** — 本文件已被 `skills/threads-write-post/` 取代為 Stage 1–7 的 source of truth。原文契約規範已重組為 skill 結構（SKILL.md + `references/stage-N-*.md` × 5 + conditional loading）。Stage 5 reference 從「依序讀三份不存在的檔」reframe 為「讀 stage-5-draft.md + angle.md source_quotes」（修補 0427 v1 reference broken 缺口）。
+>
+> 本文件保留作為 git 歷史與背景 context（下方紀律違規 backstory），**不再 actively 維護**。請以 `skills/threads-write-post/SKILL.md` 為準，不要直接編輯本檔。
+
 > 為 advisor 寫貼文流程提供工程化契約。每個 Stage 的輸出必須符合 schema，每個 Gate 必須通過 checklist 才能進下一 Stage。
 >
 > **建立背景**：0424 18:07 session AI 違反 skill 紀律 3 次（edgy sharpness / self-deprecation / 跳步驟反序讀 reference），根因是 pipeline 缺工程化（無 stage gate / 無 lint / 無依賴檢查）。本文檔補 A 層（artifact schema）+ B 層（stage gate）作為純文字契約。

@@ -161,6 +161,7 @@ Currently using Standard Access for `threads_keyword_search` — search results 
 - **threads-algorithm-skill** (`/threads-algorithm-skill`) — Threads/Meta 社群經營顧問，基於 26 個 Meta 演算法專利機制，提供內容策略建議。來源：`azuma520/threads-algorithm-skill`
 - **threads-cli** — `threads` CLI 與 `threads-advisor` 操作手冊。Agent 執行 Threads 帳號操作（發文、查數據、刪文、審查草稿）時自動參考。Skill 檔案：`skills/threads-cli/SKILL.md`
 - **threads-angle-gate** — C 路線第 1 層「選角度 Gate」草案。使用者要寫 Threads 貼文但還沒想清楚切入點時用；訪談者+共創者模式，AI 只用「發問」和「總結+詢問」兩種發言形式，產出 `drafts/<slug>.angle.md`。Skill 檔案：`skills/threads-angle-gate/SKILL.md`
+- **threads-write-post** — Stage 1–7 寫貼文 pipeline。從 `angle.md` 出發，跑 選框架 → 規畫骨架 → 演算法 mapping → 互動設計 → 寫稿 → 讀稿 → 發文。內含 Pipeline Iron Law、Stage Entry Template、5 份 stage reference（conditional loading），取代 `docs/dev/advisor-pipeline-schema.md`（已 deprecate）。前置：必須先跑 `threads-angle-gate` 拿到 angle.md。Skill 檔案：`skills/threads-write-post/SKILL.md`
 
 ## Dependencies
 
