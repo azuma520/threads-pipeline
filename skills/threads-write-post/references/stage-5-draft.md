@@ -8,11 +8,13 @@
 
 ## 進入 Stage 5 必做的三件事（缺一 = Gate 5→6 FAIL）
 
-1. **讀本份 reference in full**（包括 Voice Hard Lint 與 7 條寫作技巧筆記）
-2. **讀 `drafts/<slug>.angle.md` 的 `source_quotes`**——撈出 user 在 Stage 0 親口說的原話
-3. **在 `drafts/<slug>.draft.md` frontmatter 寫 `references_read_in_order: true`**——audit trail，沒這欄位 = 默認沒讀 = FAIL
+1. **進 Stage 5 後**才 Read 本份 reference in full（包括 Voice Hard Lint 與 7 條寫作技巧筆記 + 末尾 Read Evidence Phrase）。「之前讀過」不算——進 Stage 5 後重讀，這是 fresh evidence 條件。
+2. **進 Stage 5 後**才 Read `drafts/<slug>.angle.md` 的 `source_quotes`——撈出 user 在 Stage 0 親口說的原話。「session 開頭讀過」不算——進 Stage 5 後重讀。
+3. **在 `drafts/<slug>.draft.md` frontmatter 寫兩個欄位**：
+   - `references_read_in_order: true`——audit trail
+   - `read_evidence: "<逐字引用本 reference 末尾 Read Evidence Phrase>"`——anti-cheat 機械證據
 
-這三件事的順序：先 1 後 2，最後寫稿時把 `references_read_in_order: true` 帶進 frontmatter。
+任一缺 = 默認沒讀 = FAIL。
 
 ---
 
@@ -34,6 +36,7 @@
 stage_entry_announced: true
 upstream_gate_passed: true
 references_read_in_order: true   # 強制 audit trail
+read_evidence: "<逐字引用本 reference 末尾 Read Evidence Phrase 的完整句子（含標點）>"
 
 posts:
   - position: "P1"
@@ -149,6 +152,7 @@ self-check 結果記到 `voice_self_check_results.notes` 欄位。**self-check p
 ## Plan Failures（含以下任一即 Gate 5→6 FAIL）
 
 - `references_read_in_order` 欄位缺 或 false
+- `read_evidence` 欄位缺 或 不是本 reference 末尾 Read Evidence Phrase 的逐字引用（含標點）
 - 任一 post `text` 為空 或 含「（待寫）」
 - 任一 post 字數 ∉ [80, 300]
 - 整串字數 > 2000
@@ -158,12 +162,30 @@ self-check 結果記到 `voice_self_check_results.notes` 欄位。**self-check p
 
 ---
 
+## Read Evidence Phrase（anti-cheat）
+
+進 Stage 5 entry 讀完本 reference 後，draft.md frontmatter 的 `read_evidence` 欄位必須**逐字**引用以下這句（含標點符號）：
+
+> 「voice 漂掉而 pipeline 仍 pass 是最壞的 fail mode — Stage 5 紀律存在就是擋這個。」
+
+**這條 phrase 只在本 reference 末尾出現**——不在 SKILL.md / 其他 reference / angle.md template 出現。AI 必須真讀本 reference 到末尾才能引用正確。
+
+**怎麼用**：
+- 把上面這整句（從「voice」到「擋這個。」）複製進 draft.md frontmatter `read_evidence: "..."` 欄位
+- 寫稿前先複製，提醒自己 voice drift 是這條 stage 紀律存在的理由
+- Reviewer（人或機器）grep `read_evidence` 欄位 verify 是否逐字符合
+
+這是缺口 2 的修補——`references_read_in_order: true` 是純自報 boolean，加 `read_evidence` 後才有 grep-able 證據。
+
+---
+
 ## Gate 5 → 6 Checklist（pipeline 內最嚴的 gate）
 
 進 Stage 6 前，本訊息逐條跑：
 
 - [ ] `drafts/<slug>.draft.md` 存在
-- [ ] **`references_read_in_order` = true**（檔案 frontmatter 聲明，證據是寫前讀過本 reference + angle.md source_quotes）
+- [ ] **`references_read_in_order` = true**（檔案 frontmatter 聲明，證據是進 Stage 5 後重讀本 reference + angle.md source_quotes）
+- [ ] **`read_evidence` 欄位逐字引用 Read Evidence Phrase**（含標點，可 grep verify）
 - [ ] 每條字數 ∈ [80, 300]
 - [ ] 整串字數 ≤ 2000
 - [ ] **Voice Hard Lint 通過**（結構名沒出現在正文）

@@ -133,13 +133,14 @@ Gate 0→1 沒 PASS（angle.md 缺 sharpness / source_quotes 空 / user 沒明�
 
 **進入時必讀**：When entering Stage 3, read `references/stage-3-algo.md` in full BEFORE producing the artifact. Do not summarize from memory。
 
-**另需 consult**：global `threads-algorithm-skill` 的 26 機制清單。**不准編造機制名稱**——機制名必須引用 `threads-algorithm-skill` 原文。
+**另需 consult**：global `threads-algorithm-skill` 的 26 機制清單（散在 5 份 reference，非單一份；reference 路徑見 `stage-3-algo.md`）。**不准編造機制名稱**——機制名必須引用 reference 原文，artifact 必須聲明 source 路徑。
 
 **簡要 schema**（complete spec 在 reference）：
-- 每條 post 對應 ≥ 1 個機制：`post_position` / `mechanism` / `why_applies` / `risk`
+- `algo_skill_source`：列出實際 Read 過的 threads-algorithm-skill reference 路徑
+- 每條 post 對應 ≥ 1 個機制：`post_position` / `mechanism` / `mechanism_source`（檔名）/ `why_applies` / `risk`
 - 整體：`dominant_mechanisms`（2–3 個）/ `avoid_mechanisms`（如 Low Signal）
 
-**Gate 3→4 提醒**：機制名未引用 `threads-algorithm-skill` 原文、`why_applies` / `risk` 為空 = Gate FAIL。
+**Gate 3→4 提醒**：機制名未引用 reference 原文、`mechanism_source` / `algo_skill_source` 為空、`why_applies` / `risk` 為空 = Gate FAIL。
 
 ---
 
@@ -164,11 +165,15 @@ Gate 0→1 沒 PASS（angle.md 缺 sharpness / source_quotes 空 / user 沒明�
 
 ### 進入時必做三件事（缺一 = Gate 5→6 FAIL）
 
-**(a) 讀 `references/stage-5-draft.md` in full**——voice patterns、Voice Hard Lint、7 條寫作技巧筆記都在這份檔。Voice Hard Lint 是 pipeline 內**唯一**的 binary 機械擋條件，跳過會讓結構名漏出正文。
+**(a) 進 Stage 5 後**才 Read `references/stage-5-draft.md` in full——voice patterns、Voice Hard Lint、7 條寫作技巧筆記、末尾 Read Evidence Phrase 都在這份檔。「之前讀過」不算（fresh evidence 條件）。Voice Hard Lint 是 pipeline 內**唯一**的 binary 機械擋條件。
 
-**(b) 讀 `drafts/<slug>.angle.md` frontmatter 的 `source_quotes`**——這是 user 本篇貼文的真實聲音。stage-5-draft.md 提供的 voice patterns 是 scaffolding（短句斷行 / 不整齊節奏 / 「煩死了!!!」型 punctuation），但**特定本篇的 voice 真理在 source_quotes**。AI 自己腦補的 voice ≠ user 的 voice。
+**(b) 進 Stage 5 後**才 Read `drafts/<slug>.angle.md` frontmatter 的 `source_quotes`——這是 user 本篇貼文的真實聲音。stage-5-draft.md 提供的 voice patterns 是 scaffolding，**特定本篇的 voice 真理在 source_quotes**。
 
-**(c) 在 draft.md frontmatter 寫 `references_read_in_order: true`**——這是 audit trail 證據。沒這欄位 = 默認沒讀 = Gate FAIL。
+**(c) 在 draft.md frontmatter 寫兩個欄位**：
+- `references_read_in_order: true`（audit trail）
+- `read_evidence: "<逐字引用 stage-5-draft.md 末尾 Read Evidence Phrase>"`（grep-able anti-cheat 證據；該 phrase 只在 stage-5-draft.md 末尾出現）
+
+任一缺 = 默認沒讀 = Gate FAIL。
 
 ### 為什麼 Stage 5 特別嚴
 
@@ -178,12 +183,13 @@ Gate 0→1 沒 PASS（angle.md 缺 sharpness / source_quotes 空 / user 沒明�
 
 - `posts`：N 條完整文字，每條 `position` / `text` / `char_count`
 - `references_read_in_order`：true（audit trail）
+- `read_evidence`：逐字引用 stage-5-draft.md 末尾的 Read Evidence Phrase（grep-able 證據）
 - `voice_self_check_results`：reference 內的 self-check checklist 通過記錄
 - 字數：每條 80–300 / 整串 ≤ 2000
 
 ### Gate 5→6 提醒
 
-`references_read_in_order` 缺、字數超範圍、整串字數 > 2000、結構名（PREP / 鉤子 / SCQA / Hook / P1/P2 ⋯）漏出正文 = Gate FAIL。寫作品味問題（贅詞 / 評論體 / 教訓體 / self-deprecation / AI 整齊感）**不是 Gate FAIL**，由 user 在 Stage 5/6 用編輯眼光審。
+`references_read_in_order` 缺、`read_evidence` 缺或不符 phrase、字數超範圍、整串字數 > 2000、結構名（PREP / 鉤子 / SCQA / Hook / P1/P2 ⋯）漏出正文 = Gate FAIL。寫作品味問題（贅詞 / 評論體 / 教訓體 / self-deprecation / AI 整齊感）**不是 Gate FAIL**，由 user 在 Stage 5/6 用編輯眼光審。
 
 ---
 
@@ -268,3 +274,4 @@ Stage 6 / Stage 7 步驟 inline 在本 SKILL.md 裡（CLI 命令很短，抽 ref
 ## 變更歷史
 
 - 2026-04-30 v1：取代 `docs/dev/advisor-pipeline-schema.md` 作為 Stage 1–7 的 source of truth。把 schema 規範重組成 skill body + 5 份 reference + conditional loading。Stage 5 reference 從「依序讀三份不存在的檔」改成「讀 stage-5-draft.md + angle.md source_quotes」（修補 schema 0427 v1 的 reference broken 缺口）。
+- 2026-04-30 v1.1：subagent fresh-context 驗證後修補兩個 audit-trail 缺口。Stage 3 加 `algo_skill_source` + `mechanism_source` 欄位（指出 26 機制散在 5 份 reference，要求 artifact 聲明 source 路徑，擋「engagement chain（推測延伸）」這類腦補）。Stage 5 加 `read_evidence` 欄位 + 末尾 Read Evidence Phrase（讓 `references_read_in_order: true` 從純自報 boolean 升級為 grep-able 證據）。「先 1 後 2」順序改成「進 Stage 5 後才 Read」（fresh evidence，擋「之前讀過」鑽法）。
