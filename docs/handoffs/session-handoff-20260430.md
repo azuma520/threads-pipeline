@@ -143,3 +143,116 @@
   - **新增** `skills/threads-write-post/` 為 Stage 1–7 source of truth
   - **deprecate** `docs/dev/advisor-pipeline-schema.md`（保留歷史，不維護）
   - 既有 SSOT 不變
+
+---
+
+## Session 11:30
+
+> 注：接續 09:39，本 session 跑 P0 skill 驗證並修補。
+
+### 一、今日聚焦
+
+- P0：threads-write-post skill 驗證（subagent fresh-context test = 方案 A）+ 修補 surface 出來的 audit-trail 缺口（v1.1）
+- 接續未完：user 自己 fresh session 跑真實 voice test（方案 C）— 留 next session
+
+### 二、完成事項
+
+- **advisor-plan branch 釐清**：user 問「skill 跑通的話 advisor-plan 是不是沒用了」。git diff 看 branch 24 commits ahead 但分岔太早（main 上很多東西它 deletes）。內容拆解：(A) `skills/threads-advisor/` + 三份 reference（writing-philosophy/content-structure/voice-patterns）= 0427 缺口 4 引用的「三份檔」其實就在這 branch 沒進 main；被 threads-write-post 取代；(B) `planner.py` 317 行 + tests/evals = CLI paradigm「一行指令產 plan」，跟 user 已 confirm 的 angle-gate-first skill 工作流 不對齊。結論：skill 跑通 → branch 整體丟得掉，不適合 merge（merge 衝突太大）。
+- **Stage A 靜態檢查 PASS**：讀 SKILL.md + 5 份 reference + angle.md，verify 結構完整 / cross-reference 不 broken / Gate checklist 機械可驗 / loading guarantee 設計合格。
+- **Stage B 動態驗證（subagent dispatch with isolation: worktree）**：general-purpose agent 在隔離 worktree 跑 Stage 1→5，產出 5 個 artifact + self-eval 報告。Procedural 4 件全 PASS（announce / 讀對 reference / `references_read_in_order: true` / Gate 沒繞）；Voice 6/6 source_quotes 都引用，3 條逐字（「卻不太容易」/「就⋯有點悖論的感覺。」/「不知道大家有沒有跟我一樣的處境」）；Voice Hard Lint Python grep 4 個 post body 對 7 個禁字 全 0 hits；Stage 5 真實 Gate FAIL（P4 67 字 < 80 下限）— subagent 沒湊字繞過、明確 surface FAIL（這是好事，證明 Iron Law 真擋鑽）。
+- **6 個 schema 缺口 surface**：缺口 1（26 機制 source 沒指名清單，subagent 差點寫「engagement chain（推測延伸）」蒙混）/ 缺口 2（`references_read_in_order` 純自報 boolean 不可機械驗）/ 缺口 3（字數下限 80 vs plan 字數建議衝突誘導湊字）/ 缺口 4（無 user 場景沒 fallback）/ 缺口 5（「先 1 後 2」順序對「之前讀過」沒擋）/ 缺口 6（Stage Entry `Upstream Gate status` 不要求 evidence）。
+- **v1.1 修補**：user 選 (b) 修最嚴重 1–2 個。實作修缺口 1 + 2 + 5（缺口 5 跟 2 同檔順手修）：
+  - `references/stage-3-algo.md`：加 `algo_skill_source` + `mechanism_source` 欄位 + 明示 26 機制散在 5 份 reference 並列路徑
+  - `references/stage-5-draft.md`：末尾埋 anti-cheat phrase「voice 漂掉而 pipeline 仍 pass 是最壞的 fail mode — Stage 5 紀律存在就是擋這個。」+ `read_evidence` 欄位逐字引用 phrase + 三件事順序改成「進 Stage 5 後才 Read」
+  - `SKILL.md`：Stage 3/5 簡要 schema 同步新欄位 + 變更歷史 v1.1 entry
+- **commit `0197059`**：feat(skills): threads-write-post v1.1 — audit-trail evidence 補強
+
+### 三、洞見紀錄
+
+- **subagent fresh-context test 是 cheap proxy**——驗 procedural / loading guarantee / voice 對齊機制，~5–10 分鐘 token 中等。但驗不到 real user align 機制 + voice 是否「像 user」（subagent simulated align）。對 skill quality 該加 cheap CI 級檢查（subagent test）+ expensive ground truth 驗（user fresh session）。本次 cheap 部分先做、ground truth 留 next session。
+- **anti-cheat phrase 設計要 wording vs mechanism 分開**——SKILL.md 提「Read Evidence Phrase mechanism」（欄位名稱、要做的事），但 phrase wording 只在 stage-5-draft.md 末尾。AI 讀 SKILL.md 知道有 phrase 要引用，但**必須真讀 reference 末尾**才能拿到正確 wording。grep `read_evidence` 欄位即可 verify 是否逐字符合。比 sha256 hash / file timestamp 對齊 user「不寫 code 不打 CLI」哲學（user 自己讀 reference 也會看到 phrase；用 phrase 而非 hash 保留 semantic value，phrase 本身 = voice 紀律 raison d'être）。
+- **subagent surface「我差點怎樣鑽」是修補設計的金礦**——比 abstract「rule X 不夠 hard」有用很多。subagent 在 6 個缺口每個都附「我差點怎樣鑽」evidence（差點寫「engagement chain（推測延伸）」/ 差點湊字到 80 / 差點賴「我已讀過」跳 source_quotes 重看）。這些 concrete rationalization 直接告訴 schema 該擋哪個入口。**未來修 skill 都要求 subagent test 附這個 evidence type**。
+- **scope 縮小再次成功**——subagent surface 6 個缺口，我直覺想全修；user 先 select (b) 「修最嚴重 1–2 個」，scope 縮到 2 個（缺口 1+2，缺口 5 順手）。剩下 4 個（3/4/6）留 fresh session real test 後再決定。0428 lesson + 0429 lesson 第三次驗證：scope 縮小是 user 編輯眼光的常規 deployment（feedback_user_reframing N=4 evidence）。
+
+### 四、阻塞/卡點
+
+- 暫無。v1.1 落 main，下一步是 fresh session 真實 user 跑 C 階段 voice test。
+
+### 五、行動複盤
+
+- **靜態 + 動態分階段驗證的 phasing 對**——靜態 5 分鐘抓「結構是否破洞」，動態 subagent 抓「procedural / voice / rationalization」。如果靜態就掛掉就不用花 token 跑 subagent。本次靜態 PASS 才動態，timing 對。
+- **subagent isolation: worktree 用對**——subagent 寫 5 個 artifact 進 worktree drafts/，沒污染 main 的 drafts/，跑完報告完整可看。如果直接讓 subagent 寫 main repo 會增加 cleanup 成本。
+- **commit message 格式延續 09:39**——subagent 修補不是 minor patch，是基於 RED phase（subagent test）的 GREEN phase 修補；commit body 寫清楚「修哪個缺口 + 怎麼擋 + verify 結果」對 future archaeology 有用。
+
+### 六、檔案異動
+
+**修改（已 commit `0197059`）**：
+- `skills/threads-write-post/SKILL.md`（Stage 3/5 schema 同步 + v1.1 變更歷史）
+- `skills/threads-write-post/references/stage-3-algo.md`（缺口 1：algo_skill_source + mechanism_source）
+- `skills/threads-write-post/references/stage-5-draft.md`（缺口 2：read_evidence + Read Evidence Phrase + 缺口 5：進 Stage 5 後才 Read）
+
+**未動**：
+- `feat/advisor-plan` branch — 待 fresh session 跑完 C 階段確認 skill 真可用後 delete（或保留 docs/superpowers/ 結構 cherry-pick）
+- 缺口 3 / 4 / 6 留 backlog
+- B 路線錄影送審 / `threads-kanisleo-post.png` / `.playwright-cli/` —— 沿用 P2/P3
+
+### 七、收工回寫
+
+- [x] **Memory**：更新 `project_progress_20260430.md` append v1.1 + subagent test 結果 + 6 缺口 surface
+- [x] **MEMORY.md 索引**：暫不新增條目（同日 progress 用 append 處理）
+
+#### 下次 session next action — fresh session 跑 C 階段測試指南
+
+**P0：fresh Claude Code session 在本 repo 跑 voice ground-truth test**
+
+**怎麼開頭（兩種 prompt 任選）**：
+
+選項 (1) — **trigger test**（驗 skill description trigger 是否會觸發）：
+```
+我有一個 angle.md 想繼續寫成 Threads 貼文：drafts/not-good-enough-to-share.angle.md
+```
+→ 看 AI 是否自動 invoke threads-write-post skill。如果沒 invoke = description 太弱、要修。
+
+選項 (2) — **execution test**（直接點名跑 skill）：
+```
+請用 threads-write-post skill 把 drafts/not-good-enough-to-share.angle.md 跑到 Stage 5（不要 Stage 6/7，那要真實 CLI）。每個 Gate 的 user align 等我真實回答，你不要代答。
+```
+→ skip trigger test、直接驗 procedural + voice。
+
+建議**先 (1)，AI 沒 trigger 再用 (2) fallback**。
+
+**中途偵察（4 件 procedural 行為）**：
+
+- [ ] AI 有沒有在每進一 stage 第一個訊息按 Stage Entry Template announce（5 欄位）
+- [ ] AI 有沒有 Read 對應 reference（你看 tool call 顯示 Read `skills/threads-write-post/references/stage-N-*.md`）
+- [ ] Stage 3 algo.md AI 有沒有列 `algo_skill_source` + `mechanism_source`，且機制名 grep 得到（v1.1 修補測試重點）
+- [ ] Stage 5 draft.md frontmatter 有沒有 `read_evidence` 欄位，且 wording 是 stage-5-draft.md 末尾那條（v1.1 修補核心測試）
+
+如果 AI 在 Stage 5 寫 `read_evidence: "..."` 但 wording 是腦補出來的（不是「voice 漂掉而 pipeline 仍 pass 是最壞的 fail mode — Stage 5 紀律存在就是擋這個。」逐字）= v1.1 anti-cheat phrase 沒擋住、要再強化。
+
+**Gate user align 真實處理**：
+
+每個 stage 跑完，AI 應該停下問你「這個（框架 / 骨架 / 機制 / 互動 / 草稿）對嗎」。**你真實回答**（不是「OK 繼續」，是真實判斷對不對）。如果 AI 直接跳下一 stage 沒問 = Iron Law violation = surface 給 AI 修。
+
+**結尾驗證（這個是 C 階段獨有的、subagent 沒驗）**：
+
+- [ ] **Voice 像不像你**：讀 P1–P4 文字，你**真實**判斷「這篇貼文如果發出去，讀者覺得像我寫的還是像 AI 寫的？」這是 ground-truth voice test。subagent 報告「6/6 source_quotes 引用」是 mechanical evidence，但你的編輯眼光才是 voice 真理。
+- [ ] **不重蹈 0414「學得太過分」**：0414 那次 voice 學太過分（每個句子都模仿）。新 draft 是否有同樣問題？真實 voice 是「自然像」不是「全部詞都模仿」。
+
+**遇到 v1.1 缺口 3 / 4 / 6 怎麼辦**：
+
+- 缺口 3（字數下限 vs plan 字數建議衝突）：如果 P4 寫得自然 67 字、AI 為了過 Gate 想湊字 → 你 catch、停下、回報 v1.2 修補需求
+- 缺口 4（無 user 場景）：你是真 user，這缺口本次不會 surface
+- 缺口 6（announce 不附 evidence）：你看 announce 是否有附「Gate N→N+1 checklist 6 行勾選」— 沒附就 surface
+
+**驗證後產出**：
+
+- 新 session 結束時寫 `## Session HH:MM` append 到 `docs/handoffs/session-handoff-20260430.md`（或 0501 if 跨日），紀錄：
+  - skill 是否真可用（你的判斷）
+  - voice 是否像你（最重要）
+  - v1.1 anti-cheat phrase 是否擋住鑽法
+  - 是否要修缺口 3 / 4 / 6 / 或新發現缺口
+
+**P1**（沿用）：merge prep 或 delete `feat/advisor-plan`（C 階段確認 skill 可用後執行）；B 路線錄影送審；清理 `threads-kanisleo-post.png` / `.playwright-cli/`
+
+- [x] **SSOT 清單**：本 session 無新增 SSOT，threads-write-post v1.1 仍是 Stage 1–7 SSOT
