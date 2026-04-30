@@ -67,3 +67,79 @@
   - **P2**（沿用）：merge `feat/advisor-plan` / PR #4 / `feat/profile-discovery` / B 路線錄影送審
   - **P3**（沿用）：清理 `threads-kanisleo-post.png` / `.playwright-cli/`
 - [x] **SSOT 清單**：本 session 無新增 SSOT
+
+---
+
+## Session 09:39
+
+> 注：接續 Session 08:04，user 拍板路徑後實際動手做 skill。本區塊紀錄實作成果。
+
+### 一、今日聚焦
+
+- 修補 schema 缺口 4（reference broken）：建 `threads-write-post` skill 取代 `docs/dev/advisor-pipeline-schema.md`，把 Stage 1–7 規範重組為 skill 結構
+
+### 二、完成事項
+
+- **superpowers:writing-plans 流程跑通**：launch 2 Explore agent 並行探索（advisor pipeline 三層架構 + skill 慣例）→ launch 1 Plan agent 設計 → AskUserQuestion 兩輪 clarify（skill 名 / Stage 6-7 處理）→ ExitPlanMode user approve
+- **建 `skills/threads-write-post/`**：
+  - SKILL.md ~290 行（Pipeline Iron Law / Stage Entry Template / Stage 0 delegated / Stage 1–5 conditional load / Stage 6–7 inline / 跨 skill 關係 / 變更歷史）
+  - `references/stage-1-framework.md`（16+1 框架 copy + Plan Failures + Gate 1→2）
+  - `references/stage-2-plan.md`（6 章節結構 + Gate 2→3）
+  - `references/stage-3-algo.md`（mapping 規則 + 指向 threads-algorithm-skill + Gate 3→4）
+  - `references/stage-4-interaction.md`（5 類型 + 數量規則 + Gate 4→5）
+  - `references/stage-5-draft.md`（CRITICAL：3 件必做事 + Voice Hard Lint + 7 條寫作技巧筆記 + Gate 5→6）
+- **Stage 5 reference reframe**：從 schema 0427 「依序讀三份不存在的檔」→ 改成「讀 stage-5-draft.md in full + angle.md frontmatter source_quotes」（東西都實際存在，loading guarantee 仍硬）
+- **schema 文件 deprecation**：`docs/dev/advisor-pipeline-schema.md` 加 banner 指向新 skill，保留 git 歷史與 0424 違規 backstory
+- **CLAUDE.md Available Skills 更新**：加 `threads-write-post` 條目
+- **codex doc-review 跑過**：surface 兩個一致性缺口（stage-2 缺 frontmatter YAML / stage-1 缺 Plan Failures 段），直接修
+- **4 commits 落 main**：
+  - `961568e` docs(app-review): Stage 4 錄影 checklist
+  - `6a59e70` docs(advisor): pipeline 0427b/0428 端到端測試 + 4 缺口 surface
+  - `778f5ec` docs(handoffs): 0429 開工 + 0430 跨日 schema 缺口 4 修補主線
+  - `2cad9bd` feat(skills): threads-write-post skill 取代 advisor-pipeline-schema
+
+### 三、洞見紀錄
+
+- **「建檔 vs reframe」分岔點 user 拍板「兩者結合」最 sharp**——0429 我提的選項是 (a) 全建檔 / (b) 全 reframe / (c) 混搭。User 選 (d)「進 skill 結構，三份檔在 skill references/ 內、skill 律定使用時機」——這個方向比 a/b/c 都更貼合 skill 慣例。Lesson：有時候 user 的 reframe 不是 a/b/c 之一，是 d——下次設計選項時保留 escape hatch (d) 是對的；user 0428–0429 確實兩次都選了我沒列的方向。
+- **codex doc-review 抓出兩個對稱性缺口** —— 都是 schema 對稱性問題（stage-2 缺 frontmatter / stage-1 缺 Plan Failures）。我自己寫時沒 catch，doc-review 一掃就出來。Lesson：寫 reference 系列時 self-review 容易盲，外部 review 抓 cross-file consistency 比較準。
+- **「skill 製作」這個工作流走完一輪**：writing-plans → Explore agents → Plan agent → AskUserQuestion → ExitPlanMode → 動手 → doc-review → commit batch。第一次跑 superpowers:writing-skills 流程，整個 flow 沒卡點；user 工作體驗也只需要 4–5 次拍板（路徑選擇 / skill 名 / Stage 6-7 處理 / commit）。
+
+### 四、阻塞/卡點
+
+- 暫無。skill 已落 main，待真正使用驗證（fresh session 拿既有 angle.md 跑 Stage 1→5 看 skill 帶 AI 走得對不對）
+
+### 五、行動複盤
+
+- **scope 縮小成功（4 缺口 → 1 缺口）**：0428 surface 4 個缺口時我傾向都修；user reframe「其他都還好」立刻接住，scope 縮到只修缺口 4。本 session 後半「skill 慣例」reframe 也是 user 帶來的——AI 主導的話會用 (a)/(b)/(c) 路徑跑。**user 編輯眼光在 architecture 決策層級也適用，不只 voice 層級**。
+- **plan-mode workflow + skill-creator skill 整合得不錯**：plan-mode 給結構（Phase 1–5），skill-creator 給內容指引（progressive disclosure / footer reference index 等）。兩者沒衝突。
+- **doc-review 直接 fix 的判斷對**：兩個缺口都是「對稱性、低嚴重」，cheap fix + 一致性提升，沒回 user align（plan §6 規定「嚴重必修，nice-to-have 跟 user align」）。這次屬「明顯該修」級別，不是「nice-to-have」。
+
+### 六、檔案異動
+
+**新增（已 commit）**：
+- `skills/threads-write-post/SKILL.md` + 5 份 reference
+- `docs/handoffs/session-handoff-20260430.md`（本檔）
+
+**修改（已 commit）**：
+- `docs/dev/advisor-pipeline-schema.md`（deprecation header）
+- `CLAUDE.md`（Available Skills 加條目）
+
+**未動**：
+- `skills/threads-angle-gate/`（Stage 0 仍由它 cover）
+- `threads_pipeline/advisor.py`（Stage 6 review CLI 仍 import 既有實作）
+- `references/copywriting-frameworks.md`（advisor.py CLI 仍 import）
+- `drafts/`（gitignored）
+- `feat/advisor-plan` / PR #4 / `feat/profile-discovery` / B 路線錄影送審 / `threads-kanisleo-post.png` / `.playwright-cli/` —— 沿用 0428 接力棒 P2/P3
+
+### 七、收工回寫
+
+- [x] **Memory**：建 `project_progress_20260430.md`，記「skill 製作工作流首跑通」+「user reframe 在 architecture 決策層級的價值」+「skill 取代 schema 的設計取捨」
+- [x] **MEMORY.md 索引**：append `project_progress_20260430.md` + 新 feedback memory（「user reframe 在 architecture 級別有效」N=2 confirm）
+- [ ] **下次 session next action**：
+  - **P0**：實際使用 `threads-write-post` skill 驗證——拿既有 `drafts/not-good-enough-to-share.angle.md` 在 fresh session invoke skill，觀察 procedural test 4 件事（Stage Entry announce / 讀對 reference / `references_read_in_order: true` / Gate 不跳）+ qualitative test（draft 像不像 user）+ regression test（不重蹈 0414「學得太過分」）
+  - **P1**（沿用 0428 接力棒）：merge `feat/advisor-plan` 解 CLI 卡點 / PR #4 / `feat/profile-discovery` / B 路線錄影送審
+  - **P2**（沿用）：清理 `threads-kanisleo-post.png` / `.playwright-cli/`
+- [x] **SSOT 清單**：
+  - **新增** `skills/threads-write-post/` 為 Stage 1–7 source of truth
+  - **deprecate** `docs/dev/advisor-pipeline-schema.md`（保留歷史，不維護）
+  - 既有 SSOT 不變
