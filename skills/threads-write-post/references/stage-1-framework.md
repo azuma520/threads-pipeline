@@ -52,6 +52,50 @@
 - **評論趨勢** → 09 FIRE、02 破案解謎
 - **品牌建立** → 10 爆款人設、13 行業揭秘
 - **激勵行動** → 06 目標落地、15 通用類
+- **個人踩坑反思**（show in-process arc）→ (a) Narrative-arc（v2 新增）
+- **觀點論證**（thesis + 多 source ground）→ (b) Thesis-argumentation（v2 新增）
+
+---
+
+## Process-driven 框架（軸心擺位 v2 新增）
+
+16+1 框架多半 utility-driven（給結構讓讀者拿走）。本段補 2 型 process-driven 框架，對齊 `writing-philosophy.md` 主軸（show, don't tell）。
+
+### (a) Narrative-arc — 個人踩坑反思型
+
+| 階段 | 內容 |
+|------|------|
+| 場景 setup | 我在哪裡、做什麼，極簡 |
+| 第一個動作 | 我帶著什麼假設丟出第一句 |
+| 困難轉折 | 第一輪結果不對、不對在哪（**具體列**） |
+| 反思 *N | 每個含「我做了什麼 + 為什麼這樣做 + 心得斷言」 |
+| Byproduct asset | 順帶留下的工具 / prompt / SOP（footer） |
+
+**對齊範例**：「跟 AI 工作的核心是讓 AI 先訪談自己再讓它動手」
+
+**適用 angle**：個人實際做了某件事 + 中間踩坑 + 過程有 in-process 判斷
+
+### (b) Thesis-argumentation — 觀點論證型
+
+| 階段 | 內容 |
+|------|------|
+| 開場 declarative thesis | 一句 counter-intuitive 觀察（不是命令） |
+| 多 source 具象 ground | 案例 / 數字 / 名人 quote / 比喻 |
+| 收回 thesis | 結尾再講一次開場那句，但讀者現在懂為什麼 |
+
+**對齊範例**：「複利是違反人性的」
+
+**適用 angle**：想表達一個觀點 + 有外部 source 可佐證 + 觀點是 counter-intuitive 的
+
+### 跟 utility-driven 16+1 的差別
+
+| | 16+1 utility-driven | (a)(b) process-driven |
+|---|---|---|
+| 軸心 | 給讀者「能拿走的東西」 | show 過程 → 讓讀者自己 derive |
+| 結尾 | 通常是 CTA / Slogan / 互動鉤 | 收回 thesis / byproduct footer / 觀察句 |
+| voice | 教學 / 啟發 | 同行 share |
+
+選 utility-driven vs process-driven 不是 better/worse，是看 angle 適合哪邊。哲學主軸（show, don't tell）兩邊都適用——utility-driven 框架若 voice 走 show 模式也能成立。
 
 ---
 
