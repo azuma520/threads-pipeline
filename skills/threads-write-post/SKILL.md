@@ -261,11 +261,12 @@ Gate 0→1 沒 PASS（angle.md 缺 sharpness / source_quotes 空 / user 沒明�
 
 | Reference | 何時讀 | 涵蓋 |
 |---|---|---|
-| `references/stage-1-framework.md` | 進入 Stage 1（選框架）時 | 16+1 框架公式 + 4 類結尾 + 選擇指南 + Gate 1→2 checklist |
+| `references/writing-philosophy.md`（v2 新增） | 進入 Stage 1 + Stage 5 時 | 軸心擺位（show, don't tell）+ 5 個延伸 + 三篇範例引用 |
+| `references/stage-1-framework.md` | 進入 Stage 1（選框架）時 | 16+1 框架公式 + (a)(b) process-driven 兩型（v2 新增）+ 4 類結尾 + 選擇指南 + Gate 1→2 checklist |
 | `references/stage-2-plan.md` | 進入 Stage 2（規畫骨架）時 | 6 章節結構 + 字數預算 + 骨架欄位規範 + Gate 2→3 checklist |
 | `references/stage-3-algo.md` | 進入 Stage 3（演算法 mapping）時 | mapping 規則 + 主訴/避開機制 + 指向 `threads-algorithm-skill` + Gate 3→4 checklist |
 | `references/stage-4-interaction.md` | 進入 Stage 4（互動設計）時 | 5 類型 + 數量規則（2–3） + example_phrasing 規範 + Gate 4→5 checklist |
-| `references/stage-5-draft.md` | 進入 Stage 5（寫稿）時 — **強制讀 in full** | voice patterns + Voice Hard Lint + 7 條寫作技巧筆記 + voice_self_check checklist + Gate 5→6 checklist |
+| `references/stage-5-draft.md` | 進入 Stage 5（寫稿）時 — **強制讀 in full** | voice patterns + Voice Hard Lint + 7 條寫作技巧筆記 + 字句層 Lint（v2 新增）+ voice_self_check checklist + Gate 5→6 checklist |
 
 Stage 6 / Stage 7 步驟 inline 在本 SKILL.md 裡（CLI 命令很短，抽 reference 反而空殼）。
 
