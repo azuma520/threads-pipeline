@@ -167,7 +167,11 @@ Gate 0→1 沒 PASS（angle.md 缺 sharpness / source_quotes 空 / user 沒明�
 
 ### 進入時必做三件事（缺一 = Gate 5→6 FAIL）
 
-**(a) 進 Stage 5 後**才 Read `references/stage-5-draft.md` in full——voice patterns、Voice Hard Lint、7 條寫作技巧筆記、末尾 Read Evidence Phrase 都在這份檔。「之前讀過」不算（fresh evidence 條件）。Voice Hard Lint 是 pipeline 內**唯一**的 binary 機械擋條件。
+**(a) 進 Stage 5 後**才 Read 兩份 in full——
+- `references/stage-5-draft.md`：voice patterns、Voice Hard Lint、7 條寫作技巧筆記、末尾 Read Evidence Phrase、字句層 Lint（v2 新增）
+- `references/writing-philosophy.md`（v2 新增）：軸心擺位（show, don't tell）
+
+「之前讀過」不算（fresh evidence 條件）。Voice Hard Lint 是 pipeline 內**唯一**的 binary 機械擋條件。
 
 **(b) 進 Stage 5 後**才 Read `drafts/<slug>.angle.md` frontmatter 的 `source_quotes`——這是 user 本篇貼文的真實聲音。stage-5-draft.md 提供的 voice patterns 是 scaffolding，**特定本篇的 voice 真理在 source_quotes**。
 
@@ -187,11 +191,12 @@ Gate 0→1 沒 PASS（angle.md 缺 sharpness / source_quotes 空 / user 沒明�
 - `references_read_in_order`：true（audit trail）
 - `read_evidence`：逐字引用 stage-5-draft.md 末尾的 Read Evidence Phrase（grep-able 證據）
 - `voice_self_check_results`：reference 內的 self-check checklist 通過記錄
+- `lint_passed`：true（v2 新增；字句層 Lint 3 條 hard rule 全過——細則見 stage-5-draft.md「字句層 Lint」段）
 - 字數：每條 80–300 / 整串 ≤ 2000
 
 ### Gate 5→6 提醒
 
-`references_read_in_order` 缺、`read_evidence` 缺或不符 phrase、字數超範圍、整串字數 > 2000、結構名（PREP / 鉤子 / SCQA / Hook / P1/P2 ⋯）漏出正文 = Gate FAIL。寫作品味問題（贅詞 / 評論體 / 教訓體 / self-deprecation / AI 整齊感）**不是 Gate FAIL**，由 user 在 Stage 5/6 用編輯眼光審。
+`references_read_in_order` 缺、`read_evidence` 缺或不符 phrase、`lint_passed` 缺或 false（v2 新增）、字數超範圍、整串字數 > 2000、結構名（PREP / 鉤子 / SCQA / Hook / P1/P2 ⋯）漏出正文 = Gate FAIL。寫作品味問題（贅詞 / 評論體 / 教訓體 / self-deprecation / AI 整齊感）**不是 Gate FAIL**，由 user 在 Stage 5/6 用編輯眼光審。
 
 ---
 
