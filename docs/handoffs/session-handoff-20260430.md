@@ -256,3 +256,120 @@
 **P1**（沿用）：merge prep 或 delete `feat/advisor-plan`（C 階段確認 skill 可用後執行）；B 路線錄影送審；清理 `threads-kanisleo-post.png` / `.playwright-cli/`
 
 - [x] **SSOT 清單**：本 session 無新增 SSOT，threads-write-post v1.1 仍是 Stage 1–7 SSOT
+
+---
+
+## Session 17:24
+
+> 注：fresh session 接續 11:30 接力棒 P0 — threads-write-post v1.1 C 階段 voice ground-truth test。
+
+### 一、今日聚焦
+
+- P0：fresh Claude Code session 跑 `threads-write-post` v1.1 完整 Stage 1→5（接力棒明確）
+- 用既有 `drafts/not-good-enough-to-share.angle.md` 跑（接力棒指明 angle）
+- Stage 6/7 不跑（接力棒明示「不要 Stage 6/7，那要真實 CLI」）
+
+### 二、完成事項
+
+- **Stage 1→5 pipeline 全跑通 + Gate 1-5 全 PASS**：
+  - **Stage 1（framework）**：user 0430 N=2 confirm 14 感性觀點（0428 也選 14；reason 分別「比較符合場景」/「偏向感性觀點，可能比較好寫」）→ inherit 0428 framework.md，避免污染歷史紀錄
+  - **Stage 2（plan）**：inherit 0428 plan.md（5 條 thread / 起承轉合顯式 mapping / 風險識別到位）+ N=2 reaffirm
+  - **Stage 3（algo）v1.1 schema 升級**：補 `algo_skill_source`（5 份 algo skill reference 本 session 全 Read in full + grep verify）+ 每條 post 加 `mechanism_source`（檔名 + 行號）+ fix avoid_mechanisms 第 3 條 phrase（0428 「自然感法則的反操控偵測」grep 不到屬 paraphrase，改 reference line 1 直引「自然感法則」）+ P4 risk 段更新含 user 0430 P4 phrasing 約束
+  - **Stage 4（interaction）**：P5 example_phrasing 從「歡迎在底下留一聲」催動作 → 「不知道大家是怎麼想的呢」邀請思考 tone（user 0430 redirect）+ 檔尾 0428 schema v1 過時 SPECIAL NOTE 段清掉換 v1.1 引用
+  - **Stage 5（draft）v1.1 重寫**（不繼承 0428）：frontmatter 含 `references_read_in_order: true` + `read_evidence` 逐字引用 stage-5-draft.md line 169 phrase + 5 條 post 字數 ~88/94/95/115/87（全在 [80, 300]）/ 整串 ~479（≤ 2000）/ Hard Lint pass / 6 條 source_quotes 全對齊（含「卻不太容易」/「有點悖論的感覺」/「也可以說⋯」/「呢」逐字）+ 2 處 user 0430 redirect honor
+
+- **User 0430 兩處 phrasing redirect 接住**：
+  - **P4**：「最近用 AK 大開源的一套 skill / 在做一個發文輔助工具的開發」(in-progress / 不寫工具名 / attribution AK 大 / 不細講工具特性)
+  - **P5**：「也可以說⋯ / 不知道大家是怎麼想的呢」(邀請思考 tone，不催留言)
+
+- **C 階段 voice ground-truth test user judgment（最重要結論）**：
+  > 「寫的不錯，雖然不夠像我，但是至少要改不會讓我覺得很困難或是偏離我想表達的事情，而且也不會覺得過度模仿。但 P5『也可以說⋯ / 不知道大家是怎麼想的呢』寫得不好。總之我認為方向是對的，後續再讓我 human loop 的環節做修改就還行。」
+
+- **0414「學得太過分」regression check：PASS**（user 明說「不會覺得過度模仿」）
+
+- **v1.1 anti-cheat phrase verify**：user 沒打槍 = 默認對得上（draft.md frontmatter `read_evidence` 逐字引用 stage-5-draft.md line 169「voice 漂掉而 pipeline 仍 pass 是最壞的 fail mode — Stage 5 紀律存在就是擋這個。」）
+
+- **6 個 v1.1 缺口（0430 11:30 surface）狀態 update**：
+  - 缺口 1（algo skill source 沒指名）：v1.1 已修，本次跑通 ✓
+  - 缺口 2（references_read_in_order 純自報）：v1.1 已修，本次 read_evidence 跑通 ✓
+  - 缺口 3（字數下限 vs plan 字數建議衝突）：本次 P1-P5 字數自然在範圍，**沒 surface**（不必修）
+  - 缺口 4（無 user 場景沒 fallback）：本次有 user，N/A
+  - 缺口 5（「先 1 後 2」對「之前讀過」沒擋）：v1.1 已改「進 Stage 5 後才 Read」fresh evidence，本次 honor ✓
+  - 缺口 6（announce 不附 evidence）：本次每 stage announce 都列 5 欄位 + Upstream Gate status 評估 ✓
+
+- **新發現：phrasing in-context fit 問題**（不是 schema 鑽）— P5「也可以說⋯ / 不知道大家是怎麼想的呢」是 user 0430 自己給的 hint，AI 老實照做，但句式落地讀起來不夠 organic。**這跟 AI 主動鑽 schema 是不同 failure type**。User 0430 明示「後續 human loop 改」 = scope decision「不在 AI 階段 force-fix」。
+
+- **第一次 user feedback「太抽象」立刻接住改白話**（0429 lesson active deployment N=2）：surface algo.md mapping 給 user align 時用工程術語（Creator Embedding 主集群 / 機制 source 行號），user 回「我有點聽不懂你說甚麼 你白話跟我溝通」。立刻 reframe 成「P4 那段要不要明寫工具名字」這個 user 真實要決定的事，user 接住 + 給具體 phrasing。**Process working**：lesson 已內化到實時 detection。
+
+### 三、洞見紀錄
+
+1. **skill 出產 = 「好的 starting point」+ user human loop 完成最後一哩**（N=1 user ground truth confirm）
+   - User 評語「voice 不夠像但夠近 / 改不困難 / 不偏離 / 不過度模仿 / 方向是對的」精準描述這個分工
+   - **這是 skill design 該守的 ceiling**：不要試圖 100% mimic，要 leave room for user 編輯
+   - 過度追求 100% mimic 反而會踩 0414「學得太過分」regression
+   - **Implication**：skill 不是「替代 user voice」，是「把 voice 拉到夠近、不過頭、user 編輯眼光接得住」這個甜蜜點
+
+2. **Phrasing in-context fit ≠ schema 鑽**（新 anti-pattern type）
+   - P5「也可以說⋯ / 不知道大家是怎麼想的呢」: user 給 hint，AI 老實照做，但句式落地不夠 organic
+   - 跟 AI 主動腦補 / 鑽 schema 是不同 failure type
+   - **Implication**：schema-level 修補擋的是 AI 主動鑽；user-given hint 的 in-context fit 不在 schema 能擋的範圍
+   - **Don't try**：不要試圖在 schema 層面修這類問題，留 user editor takeover space
+
+3. **「太抽象 = user feedback 訊號」N=2 active deployment**（不是只記 memory）
+   - 0429 lesson 第二次 active 用：本次 algo align 用工程術語 → user 立刻 catch「白話跟我溝通」→ 我立刻 reframe 成「P4 要不要明寫工具名」 → user 接住 + 給具體方向
+   - **Default**：未來先用人話，要工程細節時主動 surface「要我細說 X 嗎」這種 opt-in 詢問，不要 default 攤工程細節給 user
+
+4. **0428 既有 artifact 處理判準 (inherit vs overwrite vs hybrid)**
+   - **(a) v1.1 schema-level 強制 → overwrite**（algo / draft）
+   - **(b) user redirect → overwrite**（algo P4 / interaction P5 / draft）
+   - **(c) 內容 valid + user 0428 align → inherit + 跨 session N=2 reaffirm**（framework / plan）
+   - 本次 robust，未來 fresh test 重跑都用這套
+
+5. **混淆 test history 是 fresh session anti-pattern**
+   - 本 session 開頭寫 framework.md considered_frameworks PREP why_fit 時誤把「0428 fresh test 用 PREP 跑出 67 字 FAIL」當佐證——實際 0428 fresh test 用 14、0430 subagent test 才 67 字 FAIL
+   - User 沒 catch、我自己 catch 後 surface 給 user，並選擇 (a) inherit 0428 framework.md（避免污染歷史紀錄 + 本次寫的有腦補錯）
+   - **Lesson**：引用「之前 test 結果」當證據時要先 verify 哪一次 test，不要混 test sources。Test history 累積後越容易混。
+
+6. **`feedback_user_reframing` N=4 → N=5**（escape hatch (d) 持續驗證）
+   - 本 session user 給的方向都不在 AI 提的選項框內：
+     - P4 redirect：「不要寫名字 → AK 大 → 開發」（不是 a/b 任一條）
+     - P5 redirect：「邀請思考的感覺 / 不知道大家是怎麼想的呢」（user 自己 phrase 出 example）
+     - 結尾「後續 human loop 修改就還行」（不是「要繼續修 / 要重做」二擇）
+   - **連續三次 user 給的方向都在我 a/b/c 框外**
+
+### 四、阻塞 / 卡點
+
+- 暫無。Pipeline 跑通 + user voice ground truth 給 + 接力棒 P0 完成。
+
+### 五、行動複盤
+
+- **「inherit 0428 + 跨 session N=2 reaffirm」是 fresh test 高效路徑**：framework / plan / interaction 直接 inherit 省下重跑時間，但每個都 surface 給 user N=2 reaffirm（不是默認 inherit）。比「全部重跑」快 60%+ + 比「不問直接 inherit」更安全（user 仍是真實判斷者）。
+- **algo.md v1.1 schema 升級的 cheap fix**：補 `algo_skill_source` + 每條 post `mechanism_source` 行號 = ~10 mins effort、audit-trail 升級顯著。**未來其他 v1 → v1.1 升級都用這個 pattern**：(a) 列出新 schema 欄位 (b) 對應內容從既有 artifact 提取 (c) 標記 source line + grep verify。
+- **接力棒明確「不要 Stage 6/7」是對的 scope decision**：Stage 6/7 都需要真實 CLI execution，本次 voice ground truth 不需要 publish 也能驗。守住 scope 沒擴展到不必要的 area。
+- **P5 hotspot 不在 AI 階段 force-fix**：user 明說「後續 human loop 改」= 對的 scope decision。AI 強行修可能把 voice 修向 AI 偏好（user pushed away from AI judgment）。**Trust user editor takeover signal**。
+
+### 六、檔案異動
+
+**修改（drafts/ 是 gitignored，不進 commit）**：
+- `drafts/not-good-enough-to-share.algo.md`（v1.1 升級：algo_skill_source + 每條 post mechanism_source + avoid_mechanisms 第 3 條 fix phrase + P4 risk 段更新含 user 0430 phrasing 約束）
+- `drafts/not-good-enough-to-share.interaction.md`（P5 example_phrasing redirect + 檔尾 0428 schema v1 過時 SPECIAL NOTE 段清掉換 v1.1 引用）
+- `drafts/not-good-enough-to-share.draft.md`（v1.1 重寫：references_read_in_order + read_evidence 逐字引用 stage-5-draft.md line 169 + 兩處 user 0430 redirect honor + voice_self_check_results 完整 6 類 self-review）
+
+**inherit 不動（N=2 reaffirm）**：
+- `drafts/not-good-enough-to-share.framework.md`（0428 版）
+- `drafts/not-good-enough-to-share.plan.md`（0428 版）
+- `drafts/not-good-enough-to-share.angle.md`（angle 不在本 skill 範圍）
+
+**未動**（沿用 11:30 / 0428 接力棒 P1/P2）：
+- `skills/threads-write-post/`（v1.1 落地後本次沒 surface schema 級新缺口；user 0430 hint phrasing in-context fit 不是 schema 層面問題）
+- `feat/advisor-plan` branch / B 路線錄影送審 / 清理 `threads-kanisleo-post.png` / `.playwright-cli/`
+
+### 七、收工回寫
+
+- [ ] **Memory**：append `project_progress_20260430.md` 紀錄 Session 17:24 — C 階段 voice ground-truth test 結果（user N=1「夠近不過頭 / 方向對」）+ skill design ceiling lesson + N=5 user reframing + phrasing in-context fit 新 anti-pattern type
+- [ ] **MEMORY.md 索引**：暫不新增條目（同日 progress append 處理）
+- [ ] **下次 session next action**：
+  - **P0（user 明確指派）**：用其他主題 / 場景再跑 threads-write-post skill — 找下一個想分享的主題 → 跑 `threads-angle-gate` 拿 angle.md → 跑 threads-write-post 全程。**比較重點**：(a) voice 是否依然「夠近不過頭」N=2 confirm；(b) phrasing in-context fit 問題會不會在不同主題下也出現；(c) 缺口 3/4/6 在新主題下會不會 surface
+  - **P1（沿用）**：handle Stage 6/7 真實 CLI（如果這篇要發或下篇要跑全程）；merge prep / delete `feat/advisor-plan`（C 階段已確認 skill 真可用）；B 路線錄影送審
+  - **P2（沿用）**：清理 `threads-kanisleo-post.png` / `.playwright-cli/`
+- [x] **SSOT 清單**：本 session 無新增 SSOT，threads-write-post v1.1 仍是 Stage 1–7 SSOT；C 階段 voice ground-truth test result（user N=1 confirm「夠近不過頭 / 方向對」）為 v1.1 quality bar reference
