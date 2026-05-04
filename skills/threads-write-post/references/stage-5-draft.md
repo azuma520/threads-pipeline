@@ -190,9 +190,59 @@ self-check 結果記到 `voice_self_check_results.notes` 欄位。**self-check p
 - [ ] 整串字數 ≤ 2000
 - [ ] **Voice Hard Lint 通過**（結構名沒出現在正文）
 - [ ] `voice_self_check_results` 已填寫
+- [ ] **字句 lint 通過** + **`lint_passed: true` frontmatter 欄位寫入**（細則見下「字句層 Lint」段）
 - [ ] **User 用編輯眼光審稿過**（寫作品味由 user 判斷，不是機械 lint）
 - [ ] **User align**：「草稿讀起來像我嗎」明確發生於本 session
 
 任一未勾 = Gate FAIL = **不得**進 Stage 6。
 
 **特別注意**：Voice Hard Lint 是唯一機械擋條件（結構名漏出正文）；寫作品味（贅詞 / 教訓體 / self-deprecation 等）由 user 編輯審把關，AI 不替代。
+
+---
+
+## 字句層 Lint（hard rule，v2 新增）
+
+寫稿完成後，自我檢查 3 條 hard rule。任一未過 → 改稿，不得進 Gate 5→6 PASS。
+
+### Rule 1：字短料多
+
+- 一句講一件事
+- 沒事的形容詞 / 副詞刪掉
+- 反例：「這個非常厲害的工具其實真的可以幫助大家更快地完成任務」（贅詞太多）
+- 正例：「這個工具能讓你提早完成任務」
+
+### Rule 2：刪雜質
+
+- 寫完通刪
+- 刪掉之後讀起來沒差的句子，就該刪
+- 反例：「以下我來分享我的看法。我覺得⋯」（前句純 meta，沒貢獻）
+- 正例：直接「我覺得⋯」
+
+### Rule 3：一篇一個重點
+
+- 不允許多 thesis 並列
+- 多重點 = 沒重點
+- 反例：「我想分享 (1) 工具有多好 (2) 為什麼複利重要 (3) AI 怎麼用」（三條獨立 thesis）
+- 正例：選一條，其他兩條留著下次發
+
+### lint_passed 怎麼填
+
+寫完稿、跑完 3 條 lint self-check 後：
+
+- 全過 → frontmatter 加 `lint_passed: true`
+- 有任一沒過 → 改稿，不要假填 `lint_passed: true`
+
+### 跟 Voice Hard Lint 的差別
+
+- **Voice Hard Lint**（pipeline 唯一機械擋）：結構名（PREP / SCQA / Hook 等）漏出正文 → FAIL
+- **字句 Lint**（v2 新增）：字句層精簡度 → 進 Gate 5→6 checklist
+- 兩個是不同層，不衝突
+
+### 不採用的 13 條條目
+
+範例 3 的 13 條技巧，本 skill 只採條 7 / 9 / 13。**不採**的條目：
+
+- 條 6（強者領袖立場）→ 跟「不下命令但有判斷」衝突
+- 條 10（千萬別想自己想寫的東西）→ 跟「show 自己過程」衝突
+- 條 11（不漂亮但有用才值錢）→ 純 utility 觀，跟 utility+affinity 雙軸衝突
+- 條 12（別追求風格）→ 是另一層次的事，user 卡的是 voice 偏離自己會痛，不是想要風格
