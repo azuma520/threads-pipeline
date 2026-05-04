@@ -100,9 +100,11 @@ Gate 0→1 沒 PASS（angle.md 缺 sharpness / source_quotes 空 / user 沒明�
 
 **Artifact**：`drafts/<slug>.framework.md`
 
-**進入時必讀**：When entering Stage 1, read `references/stage-1-framework.md` in full BEFORE producing the artifact. Do not summarize from memory — 16+1 框架名稱與公式必須引用 reference 原文。
+**進入時必讀**（v2 升級為兩份）：
+1. When entering Stage 1, read `references/stage-1-framework.md` in full BEFORE producing the artifact. Do not summarize from memory — 16+1 框架（含 v2 新增 Narrative-arc / Thesis-argumentation）名稱與公式必須引用 reference 原文。
+2. **同時讀** `references/writing-philosophy.md` in full — 軸心擺位 default orientation。框架選擇要對齊 writing-philosophy 軸心（show, don't tell）。
 
-**簡要 schema**（complete spec 在 reference）：
+**簡要 schema**（complete spec 在 reference；v2 新增 (a) Narrative-arc / (b) Thesis-argumentation 兩型 process-driven 框架，跟既有 16+1 並列）：
 - `considered_frameworks`：3 個框架（不少不多），每個含 `id` / `name` / `formula` / `why_fit`
 - `chosen_framework`：使用者選定（單一），含 `id` / `name` / `chosen_reason`
 
