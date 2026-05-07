@@ -42,3 +42,16 @@ If you haven't checked the Gate checklist in **this message**, you cannot claim 
 4. **PROCEED or HOLD**：全過進下一 step；任一條沒過、停下、surface 給 user。
 
 **Anti-cheat phrase**（每進下一 step 前都要在訊息中明確講）：「**Gate N→N+1 fresh read evidence: [引用 reference 的具體段]、[列每條 criterion 的 pass/fail]**」── 沒講這句不算過 Gate。
+
+---
+
+## Stage Entry Template（每進新 step 前必跑）
+
+進入 Step N 之前，AI 必須：
+
+1. **Read** `references/step-NN-*.md` 的「目標 / AI 在乎什麼 / 為什麼 / 怎麼跑 / Gate」段 ── **fresh in this message**
+2. **State 進 step 訊息**：「**進入 Step N（[step name]）。Gate (N-1)→N 已過：[列上一 step Gate 每條 pass evidence]。本 step 目標：[引 reference 的目標段]。**」
+3. **跑 step 內容**（按 reference 的「怎麼跑」段）
+4. **完成 step 後 fresh read Gate 段、列每條 criterion 的 pass / fail evidence**
+
+**Anti-cheat**：Step N 的 anti-cheat phrase 是「**Gate (N-1)→N fresh read evidence**」── 沒講這句不算過 Gate。
