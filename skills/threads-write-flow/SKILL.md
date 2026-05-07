@@ -55,3 +55,24 @@ If you haven't checked the Gate checklist in **this message**, you cannot claim 
 4. **完成 step 後 fresh read Gate 段、列每條 criterion 的 pass / fail evidence**
 
 **Anti-cheat**：Step N 的 anti-cheat phrase 是「**Gate (N-1)→N fresh read evidence**」── 沒講這句不算過 Gate。
+
+---
+
+## Reference Table（10 step → reference doc）
+
+| Step | Reference doc | 關鍵內容 |
+|---|---|---|
+| 1 | `references/step-01-dump.md` | dump-first、AI 不打斷、reference signal 紅旗 |
+| 2 | `references/step-02-main-thread.md` | 4 件事 + 錨點 + 沒有就沒有 fallback + 訪談話術 |
+| 2.5 | `references/step-02.5-interview.md` | 5 條清單 + 4 類補料 + 諮詢式問法 + 沒有就沒有 |
+| 3 | `references/step-03-diagnosis.md` | 對照 4.1/4.2 + 輕量訪談介入 |
+| 4 | `references/step-04-narrative.md` | 4 點輸出格式 + 編排理由 + 不確定點 + 跳轉觸發條件 |
+| 5 | `references/step-05-hooks.md` | 3-5 個切入點 + 5 維度評估 + 5 鉤子類型（reference） |
+| 6 | `references/step-06-calibration.md` | 5 情境校準表 + 跳轉重跑說明 |
+| 7 | `references/step-07-finalize.md` | reference 紅旗座標（不命令式）|
+| 8 | `references/step-08-anti-template.md` | 3 句 self-prompt + user 對齊 + 機械為輔 |
+| 9 | `references/step-09-versions.md` | 多版本 + 訪談原則對齊 |
+| - | `references/00-philosophy.md` | 三層治理 + show don't tell + 訪談 + 諮詢 + 機械訊號（每 step 都引用） |
+| - | `references/01-user-expression.md` | spec 4.1 + 4.2（Step 3 + Step 7 用）|
+| - | `references/success-criteria.md` | 13.1 機械訊號 + 13.2 sense + 13.3 兩組關係 |
+| - | `lints/anti-template-grep.sh` | Step 8 機械掃描（不判死）|
