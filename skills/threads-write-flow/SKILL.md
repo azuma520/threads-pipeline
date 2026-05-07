@@ -76,3 +76,22 @@ If you haven't checked the Gate checklist in **this message**, you cannot claim 
 | - | `references/01-user-expression.md` | spec 4.1 + 4.2（Step 3 + Step 7 用）|
 | - | `references/success-criteria.md` | 13.1 機械訊號 + 13.2 sense + 13.3 兩組關係 |
 | - | `lints/anti-template-grep.sh` | Step 8 機械掃描（不判死）|
+
+---
+
+## Design Migration（背景紀錄）
+
+| 階段 | 時間 | 主要文件 | 主要差別 |
+|---|---|---|---|
+| **advisor-pipeline-schema** | 0427 | `docs/dev/advisor-pipeline-schema.md`（已 deprecate） | 第一版 schema、Stage 5 入口邏輯卡死、被 user 0428 reframe |
+| **threads-write-post v1** | 0430 | `skills/threads-write-post/SKILL.md` | 取代 schema、Stage 1-7、依賴已 lock 的 `angle.md` |
+| **threads-write-post v2** | 0504 | `skills/threads-write-post/SKILL.md` | 加 writing-philosophy reference + Stage 1 框架庫擴充 + Stage 5 字句層 lint |
+| **threads-write-flow v3**（本 skill） | 0507 | `skills/threads-write-flow/SKILL.md` | dump-first（不需 angle）+ 10 step + 三條核心 ripple（訪談 / sense > 機械 / 諮詢 + 沒有就沒有）|
+
+**選用建議**：
+
+- 已有 lock 好的 angle.md → `threads-write-post` v2
+- 從原始 dump 開始 / 沒 angle → `threads-write-flow` v3（本 skill）
+- 純 angle 探索 → `threads-angle-gate`
+
+**Spec source of truth**：`docs/superpowers/specs/2026-05-06-write-flow-skill-design.md`（v2.1.1）
