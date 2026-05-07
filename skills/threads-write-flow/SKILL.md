@@ -36,12 +36,12 @@ If you haven't checked the Gate checklist in **this message**, you cannot claim 
 
 ### Gate Function（每進下一 Step 前必跑）
 
-1. **IDENTIFY**：上一 Step 的 Gate 是哪一條（Gate N→N+1）？
+1. **IDENTIFY**：進入 Step N 前要過的 Gate 是哪一條（Gate (N-1)→N）？
 2. **READ**：對應 reference doc 的 Gate 段（`references/step-XX-*.md` 的 Gate 章節）── **必須 fresh read in this message**，不能引用之前 turn 的記憶
 3. **CHECK**：對照當前 step 的 artifact，每一條 Gate criterion 都過了嗎？
 4. **PROCEED or HOLD**：全過進下一 step；任一條沒過、停下、surface 給 user。
 
-**Anti-cheat phrase**（每進下一 step 前都要在訊息中明確講）：「**Gate N→N+1 fresh read evidence: [引用 reference 的具體段]、[列每條 criterion 的 pass/fail]**」── 沒講這句不算過 Gate。
+**Anti-cheat phrase**（每進下一 step 前都要在訊息中明確講）：「**Gate (N-1)→N fresh read evidence: [引用 reference 的具體段]、[列每條 criterion 的 pass/fail]**」── 沒講這句不算過 Gate。Phrase 採「進入 Step N」視角（跟 Stage Entry Template 一致）。
 
 ---
 

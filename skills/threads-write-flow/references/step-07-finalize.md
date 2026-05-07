@@ -20,6 +20,8 @@
 
 **過程指引**（不是 checklist）：修文時優先檢查每段是不是把抽象判斷往具體經驗收（不是反過來）── 這呼應 2.7 show, don't tell。
 
+**邊界**：Step 7 不必預先 anti-template、抗模板化是 Step 8 的責任。Step 7 只專注修文力道 + 主線 + 真實感保留 ── 不要因為「Step 8 會抓紅旗」就在 Step 7 提前自審到無限修文 loop。
+
 ## Step 7 修完後 Step 8 會抓的紅旗（參考、非絕對）
 
 空泛 / AI 味 / 教學文 / 勵志文 / 真實語氣磨平 ── 這是 Step 8 sense 自審 + user 對齊時的 reference 座標（呼應 13.1 reference signal 哲學、不是判死規則）。
