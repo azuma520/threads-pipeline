@@ -2,6 +2,9 @@
 # anti-template-grep.sh — Step 8 反模板化檢查的機械訊號（不是判死規則）
 #
 # 用法：bash anti-template-grep.sh <文章路徑>
+#   Linux / macOS：直接 invoke
+#   Windows：在 Git Bash / WSL 內 invoke（PowerShell 無法直接跑 bash script）
+#
 # Output：列出命中的訊號、給 sense 自審 + user 對齊 reference
 # 退出碼：0（永遠 ── 命中不是 fail）；命中數量在 stderr
 

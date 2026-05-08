@@ -30,8 +30,6 @@ AI 開場語**紅旗訊號**（命中後 sense 自審是否真的在打斷 user�
 - 「請給我結構 / 大綱」
 - 「我們先確定主題」
 
-> 註：spec subagent validation 問題 4.2 標 Step 1 enforce「不可以包含」跟 13.1 reference signal 哲學不一致 ── 改成 reference signal 寫法、命中後 sense 判斷、不 binary 判死。
-
 ## Gate（進 Step 2 前必過）
 
 - [ ] AI 開場語沒命中紅旗訊號（grep + sense 判斷）
