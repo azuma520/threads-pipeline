@@ -1,0 +1,97 @@
+---
+name: threads-write-flow
+description: "Use when the user wants to write a Threads post end-to-end starting from raw dump (no pre-existing angle) — dump-first workflow with 10 steps: dump → main thread → interview supplement → diagnosis → narrative draft → hooks → user calibration → finalize → anti-template → versions. Triggers: user says 「我有東西想寫但還沒想清楚」/「幫我從原始素材寫文」/「跑寫文工作流」/「我要寫 Threads 但沒 angle」, dumps raw material without a pre-locked angle. PREREQUISITE: none (Step 1 accepts raw dump). Do NOT use when user has a locked angle.md — use threads-write-post v2 (which starts from angle). Do NOT use for Stage 0 angle decisions if user is still unsure — use threads-angle-gate first."
+---
+
+# threads-write-flow — Threads 貼文寫作 pipeline（Step 1→9，dump-first）
+
+## 這個 skill 是什麼
+
+從 user 的**原始 dump**（沒有預先 lock 好的 angle）出發、走 10 step 把貼文寫到能發出去：
+
+1. **原始材料輸入**（user dump、AI 不打斷）
+2. **核心主線整理**（AI 抓 4 件事 + 綁原文錨點）
+2.5 **訪談補充**（諮詢式問法 + 5 條素材檢查 + 沒有就沒有）
+3. **原文優點與弱點診斷**（對照 user 表達特徵 4.1/4.2）
+4. **初步結構重排**（敘事草稿 + 編排理由 + 不確定點）
+5. **鉤子與切入點挖掘**（3-5 個切入點 + 5 維度評估）
+6. **使用者 sense 校準**（user 是總編輯、5 情境校準表）
+7. **最終修文**（reference 紅旗座標）
+8. **反模板化檢查**（3 句 sense self-prompt + user 對齊）
+9. **可選發文版本輸出**（短版 / 長版 / 多平台）
+
+**跟 `threads-write-post` v2 的差別**：v2 從已 lock 的 `angle.md` 接 Stage 1（選框架）；本 skill 從**原始 dump** 開始，前置不需要 angle.md。兩個 skill 並存、user 視情境選用。
+
+**Spec source of truth**：`docs/superpowers/specs/2026-05-06-write-flow-skill-design.md`（v2.1.1）。
+
+---
+
+## Pipeline Iron Law（凌駕全文件，跨 step 適用）
+
+```
+NO STEP PROGRESSION WITHOUT FRESH GATE EVIDENCE.
+```
+
+If you haven't checked the Gate checklist in **this message**, you cannot claim Step N is complete. **Spirit over letter** — finding a loophole in the wording is still a violation.
+
+### Gate Function（每進下一 Step 前必跑）
+
+1. **IDENTIFY**：進入 Step N 前要過的 Gate 是哪一條（Gate (N-1)→N）？
+2. **READ**：對應 reference doc 的 Gate 段（`references/step-XX-*.md` 的 Gate 章節）── **必須 fresh read in this message**，不能引用之前 turn 的記憶
+3. **CHECK**：對照當前 step 的 artifact，每一條 Gate criterion 都過了嗎？
+4. **PROCEED or HOLD**：全過進下一 step；任一條沒過、停下、surface 給 user。
+
+**Anti-cheat phrase**（每進下一 step 前都要在訊息中明確講）：「**Gate (N-1)→N fresh read evidence: [引用 reference 的具體段]、[列每條 criterion 的 pass/fail]**」── 沒講這句不算過 Gate。Phrase 採「進入 Step N」視角（跟 Stage Entry Template 一致）。
+
+---
+
+## Stage Entry Template（每進新 step 前必跑）
+
+進入 Step N 之前，AI 必須：
+
+1. **Read** `references/step-NN-*.md` 的「目標 / AI 在乎什麼 / 為什麼 / 怎麼跑 / Gate」段 ── **fresh in this message**
+2. **State 進 step 訊息**：「**進入 Step N（[step name]）。Gate (N-1)→N 已過：[列上一 step Gate 每條 pass evidence]。本 step 目標：[引 reference 的目標段]。**」
+3. **跑 step 內容**（按 reference 的「怎麼跑」段）
+4. **完成 step 後 fresh read Gate 段、列每條 criterion 的 pass / fail evidence**
+
+**Anti-cheat**：Step N 的 anti-cheat phrase 是「**Gate (N-1)→N fresh read evidence**」── 沒講這句不算過 Gate。
+
+---
+
+## Reference Table（10 step → reference doc）
+
+| Step | Reference doc | 關鍵內容 |
+|---|---|---|
+| 1 | `references/step-01-dump.md` | dump-first、AI 不打斷、reference signal 紅旗 |
+| 2 | `references/step-02-main-thread.md` | 4 件事 + 錨點 + 沒有就沒有 fallback + 訪談話術 |
+| 2.5 | `references/step-02.5-interview.md` | 5 條清單 + 4 類補料 + 諮詢式問法 + 沒有就沒有 |
+| 3 | `references/step-03-diagnosis.md` | 對照 4.1/4.2 + 輕量訪談介入 |
+| 4 | `references/step-04-narrative.md` | 4 點輸出格式 + 編排理由 + 不確定點 + 跳轉觸發條件 |
+| 5 | `references/step-05-hooks.md` | 3-5 個切入點 + 5 維度評估 + 5 鉤子類型（reference） |
+| 6 | `references/step-06-calibration.md` | 5 情境校準表 + 跳轉重跑說明 |
+| 7 | `references/step-07-finalize.md` | reference 紅旗座標（不命令式）|
+| 8 | `references/step-08-anti-template.md` | 3 句 self-prompt + user 對齊 + 機械為輔 |
+| 9 | `references/step-09-versions.md` | 多版本 + 訪談原則對齊 |
+| - | `references/00-philosophy.md` | 三層治理 + show don't tell + 訪談 + 諮詢 + 機械訊號（每 step 都引用） |
+| - | `references/01-user-expression.md` | spec 4.1 + 4.2（Step 3 + Step 7 用）|
+| - | `references/success-criteria.md` | 13.1 機械訊號 + 13.2 sense + 13.3 兩組關係 |
+| - | `lints/anti-template-grep.sh` | Step 8 機械掃描（不判死）|
+
+---
+
+## Design Migration（背景紀錄）
+
+| 階段 | 時間 | 主要文件 | 主要差別 |
+|---|---|---|---|
+| **advisor-pipeline-schema** | 0427 | `docs/dev/advisor-pipeline-schema.md`（已 deprecate） | 第一版 schema、Stage 5 入口邏輯卡死、被 user 0428 reframe |
+| **threads-write-post v1** | 0430 | `skills/threads-write-post/SKILL.md` | 取代 schema、Stage 1-7、依賴已 lock 的 `angle.md` |
+| **threads-write-post v2** | 0504 | `skills/threads-write-post/SKILL.md` | 加 writing-philosophy reference + Stage 1 框架庫擴充 + Stage 5 字句層 lint |
+| **threads-write-flow v3**（本 skill） | 0507 | `skills/threads-write-flow/SKILL.md` | dump-first（不需 angle）+ 10 step + 三條核心 ripple（訪談 / sense > 機械 / 諮詢 + 沒有就沒有）|
+
+**選用建議**：
+
+- 已有 lock 好的 angle.md → `threads-write-post` v2
+- 從原始 dump 開始 / 沒 angle → `threads-write-flow` v3（本 skill）
+- 純 angle 探索 → `threads-angle-gate`
+
+**Spec source of truth**：`docs/superpowers/specs/2026-05-06-write-flow-skill-design.md`（v2.1.1）
