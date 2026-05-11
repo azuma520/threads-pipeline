@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 與用戶溝通：白話、清晰、不廢話
+
+**範圍**：對話 + 寫給 user 看的所有文件（angle.md / spec / plan / draft / handoff / 訊息全部）。不只「跟 user 對話」這一層，**任何 user 會看到的輸出都算**。
+
+**規則**：
+- 不用英文 jargon（除非是廣泛使用的技術詞，如 API / CLI / JSON / PR）
+- 不用對話內生成的縮寫（這次對話形成的詞，沒接觸過的 reader 看不懂）
+- 不用「翻轉瞬間 / 反向關係 / inside view / default 路徑 / inversion / framing」這類翻譯腔詞
+- 工程細節 opt-in：user 沒問就不寫；要寫先問「要我細說 X 嗎？」
+- 寫完唸一次：用一個沒看過本 session 的 reader 來讀，他每個詞應該秒懂
+
+**為什麼重要**：違反一次 = user 要 catch、要我重寫 = 浪費 user 時間。N=4+ active deployment（含 angle.md 這層）。
+
 ## Session 開工規則
 
 **每次 session 開始時，在回應用戶第一個任務之前，必須：**
