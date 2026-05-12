@@ -2,11 +2,50 @@
 
 **前置哲學**：本 step 遵守 references/00-philosophy.md 的 5 條原則。
 
+## Step 2 Entry：reread profile Section 7 + Section 4
+
+進入 Step 2 第一件事 ── reread `references/02-user-profile.md` 的 Section 7（4 維 schema + N 樣子實例）+ Section 4（內核 N 條）。
+
+**為什麼 reread**：Step 1 entry 已全載、但長 pipeline 進到 Step 2 容易 drift；4 維 + 內核是抓主線時的 anchor、reread 確保 surface 給 user 的角色設定 / 主線判斷對齊內核。
+
+**reread 後行為**：內部使用、不在對話中展開列出 section 內容（避免機械感）。
+
 ## 目標
 
 替文章定向 ── 讓 user 跟 AI 都知道這篇要往哪裡走。
 
-## AI 在乎什麼
+## 主線 = 角色設定 + 4 件事
+
+「主線」包含兩層：
+
+| 層 | 內容 | 對應 spec |
+|---|---|---|
+| **件事 0**：角色設定 4 維 | 身份 / 視角 / 思維 / 背景 | spec「這篇的角色設定」|
+| **件事 1-4**：事件層 + 重量層 | 核心問題 / 誤解 / 轉折 / 判斷 | spec「個人經驗 + 個人觀察 / 心得」|
+
+3 件事 view（spec 視角）：
+- **角色設定（4 維）** = 件事 0
+- **個人經驗（事件層）** = 件事 1 + 件事 2 + 件事 3（核心問題 / 誤解 / 轉折）
+- **個人觀察 / 心得 / 判斷（重量層）** = 件事 4（判斷）
+
+## 件事 0：角色設定 4 維
+
+這篇文章的「我」是誰、怎麼看、怎麼思考、在什麼 context ── 4 維必須抓對、否則後面 step 全歪。
+
+| 維度 | 抓什麼 | 例子 |
+|---|---|---|
+| **身份** | 這篇的我是誰 | 「一年前剛接觸行銷的我」/ 「正在做某事的我」/ 「父親」 |
+| **視角** | 怎麼看這件事 | 自我回顧 / 痛點→動手 / 借第三方觀點 / 日常→借喻 |
+| **思維** | 思考方式 | 問題驅動 / 直覺串接 / 聯想式 / 漸進 |
+| **背景** | context | 跨領域成長某段 / 正在做的當下 / 家庭旅行場景 |
+
+**怎麼抓**：從 dump + Layer 1（profile Section 7 樣子實例）對位、surface 假設給 user 用刪除法 verify。
+
+「**我聽下來這篇的我像「樣子 A（從接觸新領域到做出成果者）」── 身份是 X、視角是 Y、思維是 Z、context 是 W、你看對不對？**」
+
+**對位 profile Section 7 樣子實例**：抓完 4 維後對位、surface「這篇看起來像樣子 A？還是 B？或哪個混合？」── user 用刪除法選或修；如四個樣子都不像、surface「這像新樣子、你怎麼描述？」給 user 確認、**不擅自寫進 profile.md**。
+
+## 件事 1-4：原本的 4 件事架構（保留）
 
 抓出 user 真正想講的東西，不是 user 表面講的。**4 件事必須綁原文錨點**（spec Patch #7）：
 
@@ -57,6 +96,8 @@ AI 從原始素材中抓出 4 件事 + 每件事的錨點。把結果用訪談�
 
 ## Gate（進 Step 2.5 前必過）
 
+- [ ] **Step 2 entry reread 過 profile Section 7 + Section 4**（fresh read in this message）
+- [ ] **件事 0 角色設定 4 維**抓完、surface 給 user 用刪除法 verify、對位 profile Section 7 樣子實例（A / B / C / D / 混合 / 新樣子）
 - [ ] 4 件事都列出來（即使有的「沒有就沒有」也要 explicit 標）
 - [ ] 每件事都綁了錨點（quote / 場景 / 事件 三種其一）；找不到的明確 flag「沒抓到出處」
 - [ ] 用訪談語氣 surface 給 user 看（不是純列點、而是「我聽下來...你看對不對？」格式）

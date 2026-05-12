@@ -2,6 +2,24 @@
 
 **前置哲學**：本 step 遵守 references/00-philosophy.md 的 5 條原則。
 
+## Step 5 Entry：reread profile Section 5 + Section 4
+
+進入 Step 5 第一件事 ── reread `references/02-user-profile.md` 的 Section 5（N 條紅線）+ Section 4（內核 N 條）。
+
+**為什麼 reread**：鉤子最容易踩紅線 ── 譬如「再不學 AI 就完了」會踩「販賣焦慮」紅線、譬如「教你 X 的 5 個方法」會踩「教師口吻」紅線。reread 確保 5 維度評估時對照紅線跟內核做 Hook Fit Check。
+
+**reread 後行為**：內部使用、不展開列出。
+
+## Hook Fit Check（v3.1 新增）
+
+每個候選鉤子問 3 件事：
+
+1. 鉤子對應的「我」是不是這篇的角色設定（Step 2 件事 0 抓的 4 維 / 對位 profile Section 7 樣子）？
+2. 鉤子有沒有引向 Section 5 紅線之一（譬如「再不學 AI 就完了」= 販賣焦慮）？
+3. 鉤子是從文章內核反推、還是吸睛後再硬寫？
+
+任何一項命中 ── flag 該鉤子、不直接砍、surface 給 user 用刪除法決定。
+
 ## 目標
 
 找出 3-5 個可能的開頭，讓 user 選 / reframe。

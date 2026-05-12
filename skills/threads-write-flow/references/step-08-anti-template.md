@@ -2,6 +2,14 @@
 
 **前置哲學**：本 step 遵守 references/00-philosophy.md 的 5 條原則。
 
+## Step 8 Entry：reread profile Section 5 + Section 6
+
+進入 Step 8 第一件事 ── reread `references/02-user-profile.md` 的 Section 5（N 條紅線）+ Section 6（表達方式偏好）。
+
+**為什麼 reread**：Step 8 抓「正確但不像 user」── generic 模板（譬如「在這個 AI 時代...」）/ 翻譯腔 / 教師口吻是常見 silent failure。Section 5 + 6 是抓這類的具體座標。
+
+**reread 後行為**：內部使用、不展開列出。
+
 ## 目標
 
 最後一道過濾 ── 確保文章不是「完整、正確、順暢但不像 user」。

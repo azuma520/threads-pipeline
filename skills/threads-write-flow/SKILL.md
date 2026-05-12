@@ -5,6 +5,22 @@ description: "Use when the user wants to write a Threads post end-to-end startin
 
 # threads-write-flow — Threads 貼文寫作 pipeline（Step 1→9，dump-first）
 
+## Setup（第一次用前必做）
+
+本 skill 在 Step 1 entry 會 Read `references/02-user-profile.md` ── 這份 Layer 1 用戶角色設定資料是 agent 寫稿的基底（避免預設 generic 角色、譬如「AI 受惠者」）。
+
+**新 user 第一次用前**：
+
+1. **copy 範本**：
+   ```bash
+   cp skills/threads-write-flow/references/02-user-profile.template.md \
+      skills/threads-write-flow/references/02-user-profile.md
+   ```
+2. **fill 範本內 placeholder**：開 `02-user-profile.md`、把 `<your name>` / `<你的職稱>` 等 placeholder 填成你自己的資料（工作 / 受眾 / 內核 / 紅線 / 表達偏好 / 角色 4 維 + N 樣子實例）
+3. **不需要推上 GitHub**：實際 `02-user-profile.md` 已 gitignored、不會被追蹤；範本 `02-user-profile.template.md` 留在 repo
+
+**如果沒做 setup**：skill 在 Step 1 entry 偵測檔案不存在會提示你跑 setup、不繼續 Step 1。
+
 ## 這個 skill 是什麼
 
 從 user 的**原始 dump**（沒有預先 lock 好的 angle）出發、走 10 step 把貼文寫到能發出去：
@@ -74,6 +90,8 @@ If you haven't checked the Gate checklist in **this message**, you cannot claim 
 | 9 | `references/step-09-versions.md` | 多版本 + 訪談原則對齊 |
 | - | `references/00-philosophy.md` | 三層治理 + show don't tell + 訪談 + 諮詢 + 機械訊號（每 step 都引用） |
 | - | `references/01-user-expression.md` | spec 4.1 + 4.2（Step 3 + Step 7 用）|
+| - | `references/02-user-profile.md` | Layer 1 用戶角色設定資料（Step 1 全載 + Step 2/3/5/8 按需 reread；gitignored） |
+| - | `references/02-user-profile.template.md` | 公開範本（新 user 從這 copy + fill）|
 | - | `references/success-criteria.md` | 13.1 機械訊號 + 13.2 sense + 13.3 兩組關係 |
 | - | `lints/anti-template-grep.sh` | Step 8 機械掃描（不判死）|
 
