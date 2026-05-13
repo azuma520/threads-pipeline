@@ -182,3 +182,75 @@ apply 階段三選一 surface、user 用刪除法選 (c)、給「(d) 別的方�
 **MEMORY.md 索引**：無需更新（沒新 memory entry）
 
 **權限影響**：重啟後 `.claude/settings.local.json` 的 39 條 `permissions.allow` 也一起失效，下次跑那些 Bash 指令會被重新問。如有需要保留某條、可從 `.bak` 檔複製回來建新 `settings.local.json`（只含 permissions、不含 hooks）。
+
+---
+
+## Session 16:45
+
+重啟後新 session 開工、承接 16:00 session 留的 4 個重啟收尾動作 + 處理 hook 要求的 PENDING_REVIEW。本 session 短、純收尾。
+
+### 一、本 session 主題
+
+清掉 0513 累積的 working tree 雜事 ── stub 刪除、untracked 個人 dump 加 .gitignore、跑 doc review 過 hook gate、commit + push 累積 3 commit。
+
+### 二、完成事項
+
+- 確認新 SessionStart hook 已載入（開工提示正確指向 `文檔/handoff/`、舊 Stop hook 在新 session 不再 fire）
+- 刪 stub `docs/handoffs/session-handoff-20260513.md` + `docs/handoffs/` 目錄（user 手動）
+- `.gitignore` 加 3 條根目錄錨定的個人 dump ignore（`/正向博弈論解析.html` / `/討論` / `/討論議題`）── 這三檔是 user 暫存的研究材料、不對外
+- 跑 `/codex-review-doc` ── 第一輪 skill fork 跑歪（fork agent 沒抓 git diff、做成 codebase exploration、state `passed: false`），改用 fallback：直接 `codex exec` 把 diff 餵進去配明確 5 維度 prompt ── 結果 ✅ Mergeable（5 維度全 ✅ 優、唯一 🟡 是 `/討論` pattern 未來可能擋同名正式檔但風險可接受）
+- 2 commit：
+  - `ab1d386` chore(gitignore): 忽略根目錄個人 dump 三檔
+  - `94441f4` docs(handoff): 0513 Session 16:00 七、下一步建議 補完整
+- `git push origin main` ── push `a64deeb..94441f4`（含 16:00 session 的 migration commit `5c23ed9` 一起上去）
+- 跟 user 解釋 `codex-review-doc` 跟 `doc-review` skill 兩層架構（外殼 + 真正工作流）
+
+### 三、未完事項 / 接力棒
+
+**承接跨夜 + 16:00 session 都未動的 P0**（仍未動）：
+
+- **P0** — task 8.2 fallback test（user-profile-v3-integration）── fresh subagent 跑 rename profile → agent 偵測 → 提示 setup
+- **P0** — task 8.3 acceptance check ── user 配合跑實際 dump、驗 5/8 痛點不重現（真正成功訊號）
+- **P0** — task 9.4 ── 8.2 + 8.3 跑完產 verify.md + retrospective.md、archive change
+
+**P2** — `sd0x-dev-flow:codex-review-doc` skill fork 跑歪這件事是否要寫成 issue 給 plugin 作者？或本地寫個 wrapper 強制帶 diff 給 fork agent？本次 fallback 直接跑 codex CLI 可用、但每次都要 manual prompt 不夠順。
+
+### 四、洞見 / 阻塞
+
+- **Skill fork context 不夠時、要 fallback 到直接呼叫底層 CLI**：`doc-review` skill 設 `context: fork` + `agent: Explore`、fork 出去的 Explore agent 拿到的 prompt 是空白的、自動去摸 codebase 而沒去看 git diff ── 跑歪。判斷規則：當 review 類 skill 的 state 顯示 `executed: true` 但 `passed: false`、不是改 prompt 重 invoke、是直接 fallback 到原始 CLI（codex exec）帶 diff + 明確 prompt。對齊「Skill 是 floor 不是 ceiling」memory ── skill 跑歪時手動補。
+- **review state file 是 ground truth、不是看 fork 結果文字**：之前看 fork 完成就以為過、但 state file 寫 `passed: false`；以後 review 跑完先 cat state file 確認 passed flag。
+
+### 五、複盤
+
+- **先驗工具狀態再下結論**：第一輪 fork 完成回了一堆 codebase exploration、我差點以為 review 過了直接 commit。先看 state file 才發現沒 pass、走 fallback 才拿到能用的 review 結果。對應「memory 用前先驗、不是 cache 過就信」memory 的同類教訓 ── 任何 stateful 工具的「我以為過了」都要先看 state。
+- **commit 拆兩個 vs 合一個**：拆兩個（gitignore 跟 handoff）對 reviewer 友善、未來 git log 能看到 ignore 規則為什麼加；本次 commit message 也比合一個更聚焦。同類選擇值得做 default ── 不同類型改動拆 commit。
+- **白話講 skill 兩層架構 ── user 直接問「具體在做什麼」是 prompt 設計 / debug 切角的訊號**：以後 skill 行為怪怪的、user 問細節、我答的層級要先講「外殼+工作流+底層 CLI」三層、再分別講每層做什麼。
+
+### 六、檔案異動
+
+**改**：
+- `.gitignore`（+5 行 ── 3 條 ignore + 1 行註解 + 空行）
+- `文檔/handoff/session-handoff-20260513.md`（16:00 第七欄補完整 +20 -4；本 Session 區塊 append）
+
+**刪**（user 手動）：
+- `docs/handoffs/session-handoff-20260513.md`（stub）
+- `docs/handoffs/`（空目錄）
+
+**commit**：
+- `ab1d386` / `94441f4` 已 push 到 origin/main
+
+**未追蹤但已被 ignore**：
+- `正向博弈論解析.html` / `討論` / `討論議題` ── 留在工作目錄不 commit
+
+### 七、下一步建議
+
+**下次 session next action**：
+
+- **P0** — 跑 task 8.2 fallback test（fresh subagent 跑 rename profile flow、AI 可獨立做、短）
+- **P0** — 跑 task 8.3 acceptance check（user 配合跑實際 dump、大工程、真正成功訊號）── user 有體力時優先做
+- **P0** — 8.2 + 8.3 跑完做 task 9.4 archive change
+- **P2** — codex-review-doc skill fork 跑歪處理方式（issue / wrapper / 留 fallback）
+
+**memory 同步**：本 session 是 hook gate 通關 + working tree 清雜事、不增進專案進度；唯一可進 memory 的 lesson 是「skill fork context 不夠時 fallback codex CLI」── 但這是情境依賴（只有 review 類 skill 設 fork 才會撞、不會頻繁發生）、不寫 memory；本次也不另寫 `project_progress_20260513.md` 第二份 ── **跳過 memory 寫入**
+
+**MEMORY.md 索引**：無需更新（沒新 memory entry）
