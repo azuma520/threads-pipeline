@@ -49,6 +49,11 @@ docs/superpowers/
 # 歸檔區（本地暫存；待 user 手動清）
 .archive/
 
+# 根目錄個人 dump（討論材料、研究筆記；不對外）
+/正向博弈論解析.html
+/討論
+/討論議題
+
 # threads-write-flow user-profile 實際內容（個人資訊不公開）
 # 範本見 02-user-profile.template.md、用戶 copy 後 fill
 skills/threads-write-flow/references/02-user-profile.md
