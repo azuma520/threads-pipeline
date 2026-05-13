@@ -110,3 +110,59 @@ apply 階段三選一 surface、user 用刪除法選 (c)、給「(d) 別的方�
   - **P0**：跑 task 9.4 ── 產 verify.md（5 checks）+ retrospective.md（6 sections）後 archive change
   - **P1**：「討論議題」歸檔 / 刪
   - **P2**：SKILL.md Setup section 寫法是否要 sanity check（譬如有用 user 看不懂的字眼？）── 跑 acceptance 時順便 verify
+
+---
+
+## Session 16:00
+
+接 0513 跨夜 session 之後、新 session 開工發現 workflow-harness stop hook 跟 CLAUDE.md 路徑/模板衝突，user 選「改用 workflow-harness 約定」── 本 session 把路徑跟 handoff 模板遷移到 hook 規範。本 session 區塊本身用新七欄寫（前段跨夜 session 區塊保留舊七欄不動，符合 append-only）。
+
+### 一、本 session 主題
+
+把專案 handoff 路徑跟模板從專案自訂的「`docs/handoffs/` + 舊七欄」遷移到 workflow-harness plugin 規範的「`文檔/handoff/` + 新七欄」，解 stop hook block。
+
+### 二、完成事項
+
+- 讀 workflow-harness `hooks/stop.py` + `templates/handoff.md` + `rules/handoff.md` 搞清楚 hook 真正檢查什麼（L1 檔存在、L2 最新 Session 區塊七 heading 齊全）
+- `mkdir 文檔/handoff/`
+- `git mv` 15 份 historical handoff（`docs/handoffs/` → `文檔/handoff/`），保留 git rename 歷史
+- 改 `CLAUDE.md` 兩段：「Session 開工規則」「Handoff 格式」── 路徑換中文路徑、七欄改成「本 session 主題 / 完成事項 / 未完事項-接力棒 / 洞見-阻塞 / 複盤 / 檔案異動 / 下一步建議」、memory 同步動作併入第七欄
+- 在 `session-handoff-20260513.md` append 本 session 區塊（即此區塊）
+
+### 三、未完事項 / 接力棒
+
+承接 0513 跨夜 session 的 P0（**未動**）：
+
+- **P0** — task 8.2 fallback test：rename `02-user-profile.md` → fresh subagent 偵測缺失應提示 setup
+- **P0** — task 8.3 acceptance check：user 配合跑實際 dump，驗 5/8 痛點不重現（真正成功訊號）
+- **P0** — task 9.4：8.2 + 8.3 跑完產 verify.md + retrospective.md 後 archive change
+- **P1** — `討論議題`（未追蹤檔）歸檔 / 刪
+- **P2** — SKILL.md Setup section 寫法 sanity check
+
+本 session 新增：
+
+- **P2** — 觀察一段時間，新七欄寫起來會不會卡（舊七欄「今日聚焦」涵蓋面比新「本 session 主題」廣、「行動複盤」比「複盤」具體）；若卡可在「個人化區段」加 override
+
+### 四、洞見 / 阻塞
+
+- **Hook 跟 CLAUDE.md 衝突的根因 = plugin 安裝時沒跑 `/init-harness`**：workflow-harness plugin 提供 `init-harness` skill 會建立中文路徑骨架 + 注入 CLAUDE.md 區塊，但專案 0505 init 是 user 自己寫的 CLAUDE.md + 自訂路徑。Plugin 後來 0506 加 stop hook v2（強制檢查）才把衝突 surface 出來。**未來裝有 hook 的 plugin 先跑 plugin 提供的 init skill**，不要自己手寫對應骨架。
+- **`append-only` 原則保護舊資料**：歷史 14 份 handoff 用舊七欄、hook 只看最新 Session 區塊七 heading、所以歷史檔不會 trip hook。「不動歷史」剛好兼容 hook L2 檢查。
+
+### 五、複盤
+
+- **Surface 衝突 + 給選項 + 等 user 決定**：本 session 一開始發現 hook block 沒急著 silently 改檔，先 read hook script + template 搞清楚兩邊規定再給 4 個選項（依舊路徑 / 雙寫 / 暫不寫 / 改新規範），user 選改新規範。這個流程對位 0507 訪談原則 memory（surface 選項、user 用刪除法決定）。
+- **`git mv` 而非 `mv + rm`**：保留 git rename 歷史、未來 `git log --follow` 能追到舊位置。Git 預設 rename detection 也能 work、但 explicit `git mv` 更可靠。
+
+### 六、檔案異動
+
+- 改：`CLAUDE.md` ── Session 開工規則 + Handoff 格式兩段重寫，路徑 `docs/handoffs/` → `文檔/handoff/`、七欄改成 workflow-harness 規範
+- 搬：`docs/handoffs/session-handoff-202604{22,23,24,27,28,29,30}.md`、`session-handoff-202605{04,05,06,07,08,11,12,13}.md` → `文檔/handoff/`（15 檔 git rename）
+- 新：`文檔/handoff/`（目錄）
+- 新（本檔尾）：`Session 16:00` 區塊
+
+### 七、下一步建議
+
+- **P0**：跑 0513 跨夜 session 留的 task 8.2 + 8.3 + 9.4（archive user-profile-v3-integration change）
+- **下次 session 開工**：注意路徑改了，`docs/handoffs/` 已空、要去 `文檔/handoff/` 讀
+- **memory 同步**：本 session 工作是 infra migration、不增進專案進度、不另寫 `project_progress_20260513.md` 第二份（避免覆蓋已存在的跨夜 session memory）；本遷移的 lesson 不適合進 memory（一次性事件、不會再發生）── **跳過 memory 寫入**
+- **MEMORY.md 索引**：無需更新（沒新 memory entry）
