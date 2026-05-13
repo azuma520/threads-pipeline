@@ -159,10 +159,26 @@ apply 階段三選一 surface、user 用刪除法選 (c)、給「(d) 別的方�
 - 搬：`docs/handoffs/session-handoff-202604{22,23,24,27,28,29,30}.md`、`session-handoff-202605{04,05,06,07,08,11,12,13}.md` → `文檔/handoff/`（15 檔 git rename）
 - 新：`文檔/handoff/`（目錄）
 - 新（本檔尾）：`Session 16:00` 區塊
+- **後續**：`.claude/settings.local.json` rename → `.claude/settings.local.json.bak`（讓 Claude 載不到本地 hook、待重啟後生效；本檔本來 gitignored 不影響 git tracked）
+- **後續**：新增 `docs/handoffs/session-handoff-20260513.md` stub（為通過 in-memory 舊本地 hook、待重啟刪）
 
 ### 七、下一步建議
 
-- **P0**：跑 0513 跨夜 session 留的 task 8.2 + 8.3 + 9.4（archive user-profile-v3-integration change）
-- **下次 session 開工**：注意路徑改了，`docs/handoffs/` 已空、要去 `文檔/handoff/` 讀
-- **memory 同步**：本 session 工作是 infra migration、不增進專案進度、不另寫 `project_progress_20260513.md` 第二份（避免覆蓋已存在的跨夜 session memory）；本遷移的 lesson 不適合進 memory（一次性事件、不會再發生）── **跳過 memory 寫入**
-- **MEMORY.md 索引**：無需更新（沒新 memory entry）
+**重啟 Claude Code 後優先做的事**：
+
+1. 確認新 SessionStart hook（指向 `文檔/handoff/`）已載入 ── 開工提示會顯示新路徑
+2. 確認本地 Stop hook 真的失效 ── 試 turn 結束時不再出現舊 block 訊息
+3. 刪 stub `docs/handoffs/session-handoff-20260513.md`（hook workaround、留著礙眼）
+4. （可選）跑 `git rm docs/handoffs/session-handoff-20260513.md` 把 stub 從 git 移除（如果它被 add 過）── 應該沒被 add，但保險
+
+**承接上個跨夜 session 的 P0**（**未動**）：
+
+- task 8.2 fallback test（user-profile-v3-integration）
+- task 8.3 acceptance check（真正成功訊號）
+- task 9.4 ── archive change
+
+**memory 同步**：本 session 工作是 infra migration、不增進專案進度、不另寫 `project_progress_20260513.md` 第二份；遷移 lesson 不適合進 memory（一次性事件）── **跳過 memory 寫入**
+
+**MEMORY.md 索引**：無需更新（沒新 memory entry）
+
+**權限影響**：重啟後 `.claude/settings.local.json` 的 39 條 `permissions.allow` 也一起失效，下次跑那些 Bash 指令會被重新問。如有需要保留某條、可從 `.bak` 檔複製回來建新 `settings.local.json`（只含 permissions、不含 hooks）。
