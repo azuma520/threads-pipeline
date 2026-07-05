@@ -404,7 +404,29 @@ def main(argv: list[str] | None = None) -> int:
 
     relay = extract_relay_json(html)
     if relay is None:
-        # I4: Meta schema drift detection signal.
+        # 降級鏈（design D2/D4/D7）：主管道拿不到 Relay → 試 og fallback。
+        og_html = fetch_og_fallback(args.url)
+        og = extract_og_fields(og_html) if og_html else None
+        # D7 author guard：og:title 須含 (@url_author)，否則視為 logged-out
+        # feed / 錯誤頁偽裝，不得產 partial（避免掩蓋主管道壞損信號）。
+        if og is not None and f"(@{username})" in og.get("title", ""):
+            meta = {
+                "author": username,
+                "code": code,
+                "url": args.url,
+                "fetched_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                "fetch_mode": "og_fallback",
+                "og_title": og["title"],
+            }
+            md = render_partial_markdown(og, meta)
+            out_dir = write_output(args.out, meta, md, None, shot)
+            print(
+                f"PARTIAL: relay unavailable, og fallback wrote {out_dir}",
+                file=sys.stderr,
+            )
+            return 3
+        # I4: Meta schema drift detection signal.（og 為 None 或未過 author
+        # guard 皆落此）
         debug_dir = args.out / "_debug"
         debug_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")

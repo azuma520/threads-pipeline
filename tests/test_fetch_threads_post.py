@@ -489,3 +489,54 @@ def test_write_output_none_relay_skips_relay_json(tmp_path):
     assert (out / "post.md").exists()
     assert (out / "meta.json").exists()
     assert not (out / "relay.json").exists()
+
+
+NO_RELAY_HTML = "<html><head></head><body>logged out feed</body></html>"
+
+
+def test_main_og_fallback_exits_3(tmp_path, monkeypatch):
+    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: OG_FIXTURE)
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path),
+    ])
+    assert rc == 3
+    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
+    assert len(out_dirs) == 1
+    meta = json.loads((out_dirs[0] / "meta.json").read_text(encoding="utf-8"))
+    assert meta["fetch_mode"] == "og_fallback"
+    assert "partial: true" in (out_dirs[0] / "post.md").read_text(encoding="utf-8")
+    assert not (out_dirs[0] / "relay.json").exists()
+
+
+def test_main_og_also_dead_exits_2_with_debug_dump(tmp_path, monkeypatch):
+    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: None)
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path),
+    ])
+    assert rc == 2
+    assert list((tmp_path / "_debug").glob("*_nomatch.html"))
+
+
+# Codex ①：og 有內文但 title 不含 URL 作者（logged-out feed / 錯誤頁偽裝）→ exit 2，不產 partial
+WRONG_AUTHOR_OG = (
+    '<meta property="og:title" content="Threads" />'
+    '<meta property="og:description" content="&#x767b;入以查看更多內容" />'
+)
+
+
+def test_main_og_wrong_author_exits_2_no_partial(tmp_path, monkeypatch):
+    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: WRONG_AUTHOR_OG)
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path),
+    ])
+    assert rc == 2
+    # author guard 擋下 → 不得產出 partial 目錄，走 debug dump
+    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
+    assert out_dirs == []
+    assert list((tmp_path / "_debug").glob("*_nomatch.html"))
