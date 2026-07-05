@@ -62,7 +62,7 @@
 - **理由**：實測行動版頁面「相關串文」的他人貼文被 classify 標 A，會污染 post.md 主文段。擴大實測顯示此污染為**偶發**（8 條僅首樣本觸發），但成本低且確實會發生，防護保留
 - **已考慮 alternative**：改 classify 本體——影響面大且既有測試全綁現行語意，在 filter 層處理更小創面
 - **實作前置**：先加測試確認 classify 對他人頂層非回覆貼文的實際行為，防護加在正確的層
-- **已知邊界**（Codex 建議 ③）：`username == main_author` 擋不了「同作者但非本串」的推薦貼文。實測 8 條未觀察到此情形；apply 時檢查 Relay 是否有 thread root / permalink 欄位可用 `code` 進一步錨定主串，有才加、無則接受此邊界並記錄
+- **已知邊界**（Codex 建議 ③）：`username == main_author` 擋不了「同作者但非本串」的推薦貼文。實測 8 條未觀察到此情形；apply 時檢查 Relay 是否有 thread root / permalink 欄位可用 `code` 進一步錨定主串，有才加、無則接受此邊界並記錄。**Apply 結論**：`drop_foreign_main_posts` 實作為 username-only 比對，未加 code 錨定（實測 8 條零同作者污染，風險低）；接受此邊界，若未來出現同作者污染再回加 code 錨定
 
 ### D6：網路層維持不自動測
 - **選擇**：新增測試全在純函式層（og 解析、作者過濾、exit code 分流邏輯）；`fetch_page` 仍無自動測試，真實 URL 手動 smoke 標 `[~]` deferred
