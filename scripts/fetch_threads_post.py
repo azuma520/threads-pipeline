@@ -1,12 +1,25 @@
 """Fetch a Threads post + classified threads/replies via Playwright + Relay JSON.
 
+Uses a mobile browser fingerprint (MOBILE_UA + is_mobile) — since 2026-07
+Threads redirects anonymous *desktop* traffic to the logged-out feed.
+
+Fallback chain: when Relay data is unavailable, a single anonymous HTTP GET
+extracts og:title/og:description into a partial output (post.md frontmatter
+`partial: true`, meta.json `fetch_mode: "og_fallback"`, no relay.json).
+
+Exit codes: 0 = full success · 3 = partial (og fallback) · 2 = total failure
+(HTML dumped to drafts/library/_debug/ for schema-drift inspection) · 1 = bad URL.
+Callers (vault-side line-import / source-capture) can branch on exit code alone.
+NOTE: vault-side runners must be taught exit 3 separately (migration note in
+openspec/changes/fix-threads-fetcher/design.md §Migration Plan).
+
 Prototype usage:
 
     pip install -e ".[dev,prototype]"
     playwright install chromium
     python scripts/fetch_threads_post.py "https://www.threads.com/@user/post/CODE"
 
-Output: drafts/library/{YYYY-MM-DD}_{author}_{code}/{post.md, meta.json, screenshot.png}
+Output: drafts/library/{YYYY-MM-DD}_{author}_{code}/{post.md, meta.json, relay.json, screenshot.png}
 """
 from __future__ import annotations
 
