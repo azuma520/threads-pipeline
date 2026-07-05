@@ -365,3 +365,19 @@ class TestWriteOutput:
     def test_relay_json_can_be_empty_dict(self, tmp_path):
         out = ftp.write_output(tmp_path, self.META, "# x", {}, None)
         assert json.loads((out / "relay.json").read_text(encoding="utf-8")) == {}
+
+
+def test_classify_foreign_top_level_nonreply_returns_A():
+    """行動版頁面的「相關串文」節點：他人頂層非回覆貼文，classify 現行為回 A。
+
+    這是污染來源的文件化——A 段的作者過濾防護（drop_foreign_main_posts）
+    因此存在。若未來 classify 改為回 E，本測試與防護一起調整。
+    """
+    foreign = {
+        "pk": "99",
+        "code": "FOREIGN1",
+        "caption": {"text": "unrelated recommended post"},
+        "user": {"username": "someone_else"},
+        "text_post_app_info": {"is_reply": False},
+    }
+    assert ftp.classify(foreign, "main_author") == "A"
