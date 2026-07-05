@@ -462,6 +462,22 @@ def test_extract_og_fields_missing_description_returns_none():
     )
 
 
+def test_extract_og_fields_content_with_ascii_single_quote():
+    og = ftp.extract_og_fields(
+        '<meta property="og:description" content="Don\'t miss this (@u) post" />'
+    )
+    assert og is not None
+    assert og["description"] == "Don't miss this (@u) post"
+
+
+def test_extract_og_fields_content_with_gt_char():
+    og = ftp.extract_og_fields(
+        '<meta property="og:description" content="a > b comparison" />'
+    )
+    assert og is not None
+    assert og["description"] == "a > b comparison"
+
+
 def test_render_partial_markdown_has_partial_frontmatter():
     og = {"title": "澤哥 (@lingyu9683) on Threads", "description": "內文摘要"}
     meta = {

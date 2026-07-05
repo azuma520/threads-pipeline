@@ -30,6 +30,7 @@ import json
 import pathlib
 import re
 import sys
+from html.parser import HTMLParser
 
 
 _URL_RE = re.compile(
@@ -170,9 +171,18 @@ def extract_relay_json(html: str) -> dict | None:
     return best
 
 
-_META_TAG_RE = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
-_OG_PROP_RE = re.compile(r"""property=["']og:(title|description)["']""", re.IGNORECASE)
-_OG_CONTENT_RE = re.compile(r"""content=["'](.*?)["']""", re.IGNORECASE | re.DOTALL)
+class _OGMetaParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.og: dict[str, str] = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "meta":
+            return
+        d = dict(attrs)
+        prop = d.get("property", "")
+        if prop in ("og:title", "og:description") and d.get("content"):
+            self.og[prop[len("og:"):]] = d["content"]
 
 
 def extract_og_fields(html: str) -> dict | None:
@@ -180,20 +190,20 @@ def extract_og_fields(html: str) -> dict | None:
 
     og fallback 語意（design D2）：og:description 為必要欄位——缺失或空值
     回 None（表示連降級內容都沒有）。內容經 HTML entity unescape。
-    屬性順序（property/content 誰在前）與單雙引號皆容忍（Codex ⑤）。
+    屬性順序（property/content 誰在前）與單雙引號皆容忍（Codex ⑤）；用
+    stdlib html.parser 解析，故 content 內含 ASCII 單引號或 `>` 亦不截斷。
     注意：og:description 可能被 Threads 截斷（實測 ~150 字）且不含作者自串；
     author guard（是否採用 og）由 main() 依 og:title 判斷（design D7）。
     """
-    found: dict[str, str] = {}
-    for tag in _META_TAG_RE.findall(html):
-        pm = _OG_PROP_RE.search(tag)
-        cm = _OG_CONTENT_RE.search(tag)
-        if pm and cm:
-            found[pm.group(1).lower()] = _html_lib.unescape(cm.group(1))
-    desc = found.get("description")
+    parser = _OGMetaParser()
+    parser.feed(html)
+    desc = parser.og.get("description")
     if not desc:
         return None
-    return {"title": found.get("title", ""), "description": desc}
+    return {
+        "title": _html_lib.unescape(parser.og.get("title", "")),
+        "description": _html_lib.unescape(desc),
+    }
 
 
 def filter_by_flags(
@@ -432,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
                 "og_title": og["title"],
             }
             md = render_partial_markdown(og, meta)
-            out_dir = write_output(args.out, meta, md, None, shot)
+            out_dir = write_output(args.out, meta, md, None, None)
             print(
                 f"PARTIAL: relay unavailable, og fallback wrote {out_dir}",
                 file=sys.stderr,
