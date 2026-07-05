@@ -381,3 +381,14 @@ def test_classify_foreign_top_level_nonreply_returns_A():
         "text_post_app_info": {"is_reply": False},
     }
     assert ftp.classify(foreign, "main_author") == "A"
+
+
+def test_mobile_context_kwargs_is_anonymous_mobile():
+    kw = ftp.mobile_context_kwargs()
+    assert kw["user_agent"] == ftp.MOBILE_UA
+    assert "iPhone" in ftp.MOBILE_UA
+    assert kw["viewport"] == {"width": 390, "height": 844}
+    assert kw["is_mobile"] is True
+    # 匿名鐵律：絕不帶登入態
+    assert "storage_state" not in kw
+    assert "cookies" not in kw

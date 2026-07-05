@@ -94,6 +94,27 @@ def walk_posts(data) -> list[dict]:
     return found
 
 
+# 2026-07-05 起 Threads 對桌面匿名流量一律導向 logged-out feed；
+# 行動版 UA + is_mobile 實測仍可取得完整 Relay 資料（見 openspec change fix-threads-fetcher）。
+MOBILE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+)
+
+
+def mobile_context_kwargs() -> dict:
+    """Playwright new_context kwargs for anonymous mobile fetch (design D1).
+
+    抽成純函式使指紋契約可單測，無需 mock Chromium。刻意不含
+    storage_state / cookies——匿名鐵律。
+    """
+    return {
+        "user_agent": MOBILE_UA,
+        "viewport": {"width": 390, "height": 844},
+        "is_mobile": True,
+    }
+
+
 _RELAY_QUERY_MARKER = "BarcelonaPostPageDirectQuery"
 # I3: 匹配任何含 data-sjs 屬性的 <script>；屬性順序由 runtime 檢查以相容 Meta 變動。
 _SCRIPT_RE = re.compile(
@@ -242,14 +263,15 @@ def write_output(
 def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
     """Load `url` via headless chromium and return (html, screenshot_bytes_or_None).
 
-    Anonymous browsing — no cookies, no login. Waits for `networkidle` (≤30s).
+    Anonymous browsing — no cookies, no login. Mobile fingerprint — desktop
+    anonymous access is blocked since 2026-07. Waits for `networkidle` (≤30s).
     """
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
-            ctx = browser.new_context(viewport={"width": 1280, "height": 2000})
+            ctx = browser.new_context(**mobile_context_kwargs())
             page = ctx.new_page()
             page.goto(url, wait_until="networkidle", timeout=30_000)
             html = page.content()
