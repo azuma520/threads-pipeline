@@ -392,3 +392,35 @@ def test_mobile_context_kwargs_is_anonymous_mobile():
     # 匿名鐵律：絕不帶登入態
     assert "storage_state" not in kw
     assert "cookies" not in kw
+
+
+def _mk(username, code, is_reply=False, reply_to=None):
+    info = {"is_reply": is_reply}
+    if reply_to:
+        info["reply_to_author"] = {"username": reply_to}
+    return {
+        "pk": code, "code": code,
+        "caption": {"text": f"text-{code}"},
+        "user": {"username": username},
+        "text_post_app_info": info,
+    }
+
+
+def test_drop_foreign_main_posts_removes_foreign_A_keeps_rest():
+    main_author = "azuma"
+    own_a = (_mk("azuma", "OWN1"), "A")
+    foreign_a = (_mk("stranger", "FOR1"), "A")
+    own_b = (_mk("azuma", "OWN2", is_reply=True, reply_to="azuma"), "B")
+    foreign_d = (_mk("other", "OTH1", is_reply=True, reply_to="azuma"), "D")
+    result = ftp.drop_foreign_main_posts(
+        [own_a, foreign_a, own_b, foreign_d], main_author
+    )
+    assert own_a in result
+    assert foreign_a not in result
+    assert own_b in result
+    assert foreign_d in result
+
+
+def test_drop_foreign_main_posts_missing_user_dropped():
+    ghost = ({"pk": "g", "code": "G1", "caption": {"text": "x"}, "user": {}}, "A")
+    assert ftp.drop_foreign_main_posts([ghost], "azuma") == []

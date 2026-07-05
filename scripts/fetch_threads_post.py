@@ -170,6 +170,28 @@ def filter_by_flags(
     return [(p, c) for p, c in posts_with_class if c in kept]
 
 
+def drop_foreign_main_posts(
+    posts_with_class: list[tuple[dict, str]],
+    main_author: str,
+) -> list[tuple[dict, str]]:
+    """Drop class-A nodes not authored by `main_author`.
+
+    行動版頁面會載入「相關串文」推薦區塊，他人的頂層非回覆貼文會被
+    classify 標成 A（見 test_classify_foreign_top_level_nonreply_returns_A）。
+    這些不是主文，不應進入輸出與 counts/segments 統計。
+
+    已知邊界（design D5 / Codex ③）：只擋「他人」A 段，擋不了「同作者但
+    非本串」的推薦貼文。實測 8 條未觀察到此情形——本 step 先做 username
+    過濾；code 錨定見 Step 3b 的 apply 時判斷。
+    """
+    return [
+        (p, c)
+        for p, c in posts_with_class
+        if c != "A"
+        or ((p.get("user") or {}).get("username") or "") == main_author
+    ]
+
+
 def _extract_snippet(post: dict) -> str:
     """Extract long-form text from snippet_attachment_info if present.
 
@@ -334,6 +356,7 @@ def main(argv: list[str] | None = None) -> int:
     posts = list(deduped.values())
 
     classified = [(p, classify(p, username)) for p in posts]
+    classified = drop_foreign_main_posts(classified, username)
     filtered = filter_by_flags(
         classified,
         include_replies=args.include_replies,
