@@ -365,3 +365,194 @@ class TestWriteOutput:
     def test_relay_json_can_be_empty_dict(self, tmp_path):
         out = ftp.write_output(tmp_path, self.META, "# x", {}, None)
         assert json.loads((out / "relay.json").read_text(encoding="utf-8")) == {}
+
+
+def test_classify_foreign_top_level_nonreply_returns_A():
+    """行動版頁面的「相關串文」節點：他人頂層非回覆貼文，classify 現行為回 A。
+
+    這是污染來源的文件化——A 段的作者過濾防護（drop_foreign_main_posts）
+    因此存在。若未來 classify 改為回 E，本測試與防護一起調整。
+    """
+    foreign = {
+        "pk": "99",
+        "code": "FOREIGN1",
+        "caption": {"text": "unrelated recommended post"},
+        "user": {"username": "someone_else"},
+        "text_post_app_info": {"is_reply": False},
+    }
+    assert ftp.classify(foreign, "main_author") == "A"
+
+
+def test_mobile_context_kwargs_is_anonymous_mobile():
+    kw = ftp.mobile_context_kwargs()
+    assert kw["user_agent"] == ftp.MOBILE_UA
+    assert "iPhone" in ftp.MOBILE_UA
+    assert kw["viewport"] == {"width": 390, "height": 844}
+    assert kw["is_mobile"] is True
+    # 匿名鐵律：絕不帶登入態
+    assert "storage_state" not in kw
+    assert "cookies" not in kw
+
+
+def _mk(username, code, is_reply=False, reply_to=None):
+    info = {"is_reply": is_reply}
+    if reply_to:
+        info["reply_to_author"] = {"username": reply_to}
+    return {
+        "pk": code, "code": code,
+        "caption": {"text": f"text-{code}"},
+        "user": {"username": username},
+        "text_post_app_info": info,
+    }
+
+
+def test_drop_foreign_main_posts_removes_foreign_A_keeps_rest():
+    main_author = "azuma"
+    own_a = (_mk("azuma", "OWN1"), "A")
+    foreign_a = (_mk("stranger", "FOR1"), "A")
+    own_b = (_mk("azuma", "OWN2", is_reply=True, reply_to="azuma"), "B")
+    foreign_d = (_mk("other", "OTH1", is_reply=True, reply_to="azuma"), "D")
+    result = ftp.drop_foreign_main_posts(
+        [own_a, foreign_a, own_b, foreign_d], main_author
+    )
+    assert own_a in result
+    assert foreign_a not in result
+    assert own_b in result
+    assert foreign_d in result
+
+
+def test_drop_foreign_main_posts_missing_user_dropped():
+    ghost = ({"pk": "g", "code": "G1", "caption": {"text": "x"}, "user": {}}, "A")
+    assert ftp.drop_foreign_main_posts([ghost], "azuma") == []
+
+
+OG_FIXTURE = (
+    '<html><head>'
+    '<meta property="og:title" content="&#x6fa4;哥 (@lingyu9683) on Threads" />'
+    '<meta property="og:description" content="&#x6700;近&#x7684;&#x8cbc;&#x6587;&#x5167;&#x6587; line1&#x0a;line2" />'
+    '</head><body></body></html>'
+)
+
+# Codex ⑤：屬性順序反轉（content 在 property 前）+ 單引號，parser 須仍可解
+OG_FIXTURE_REORDERED = (
+    "<meta content='&#x6700;近&#x7684;&#x5167;&#x6587;' property='og:description'>"
+)
+
+
+def test_extract_og_fields_unescapes_entities():
+    og = ftp.extract_og_fields(OG_FIXTURE)
+    assert og is not None
+    assert og["title"].startswith("澤哥")
+    assert og["description"].startswith("最近的貼文內文 line1")
+
+
+def test_extract_og_fields_attr_order_and_single_quotes():
+    og = ftp.extract_og_fields(OG_FIXTURE_REORDERED)
+    assert og is not None
+    assert og["description"].startswith("最近的內文")
+
+
+def test_extract_og_fields_missing_description_returns_none():
+    assert ftp.extract_og_fields("<html><head></head></html>") is None
+    assert (
+        ftp.extract_og_fields(
+            '<meta property="og:description" content="" />'
+        )
+        is None
+    )
+
+
+def test_extract_og_fields_content_with_ascii_single_quote():
+    og = ftp.extract_og_fields(
+        '<meta property="og:description" content="Don\'t miss this (@u) post" />'
+    )
+    assert og is not None
+    assert og["description"] == "Don't miss this (@u) post"
+
+
+def test_extract_og_fields_content_with_gt_char():
+    og = ftp.extract_og_fields(
+        '<meta property="og:description" content="a > b comparison" />'
+    )
+    assert og is not None
+    assert og["description"] == "a > b comparison"
+
+
+def test_render_partial_markdown_has_partial_frontmatter():
+    og = {"title": "澤哥 (@lingyu9683) on Threads", "description": "內文摘要"}
+    meta = {
+        "author": "lingyu9683",
+        "code": "DISnS0JJywN",
+        "url": "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "fetched_at": "2026-07-05T12:00:00+00:00",
+    }
+    md = ftp.render_partial_markdown(og, meta)
+    head, body = md.split("---\n", 2)[1], md.split("---\n", 2)[2]
+    assert "partial: true" in head
+    assert "author: lingyu9683" in head
+    assert "內文摘要" in body
+    assert "og fallback" in body
+
+
+def test_write_output_none_relay_skips_relay_json(tmp_path):
+    meta = {
+        "author": "u1",
+        "code": "C1",
+        "url": "https://www.threads.net/@u1/post/C1",
+        "fetched_at": "2026-07-05T12:00:00+00:00",
+    }
+    out = ftp.write_output(tmp_path, meta, "# md", None, None)
+    assert (out / "post.md").exists()
+    assert (out / "meta.json").exists()
+    assert not (out / "relay.json").exists()
+
+
+NO_RELAY_HTML = "<html><head></head><body>logged out feed</body></html>"
+
+
+def test_main_og_fallback_exits_3(tmp_path, monkeypatch):
+    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: OG_FIXTURE)
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path),
+    ])
+    assert rc == 3
+    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
+    assert len(out_dirs) == 1
+    meta = json.loads((out_dirs[0] / "meta.json").read_text(encoding="utf-8"))
+    assert meta["fetch_mode"] == "og_fallback"
+    assert "partial: true" in (out_dirs[0] / "post.md").read_text(encoding="utf-8")
+    assert not (out_dirs[0] / "relay.json").exists()
+
+
+def test_main_og_also_dead_exits_2_with_debug_dump(tmp_path, monkeypatch):
+    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: None)
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path),
+    ])
+    assert rc == 2
+    assert list((tmp_path / "_debug").glob("*_nomatch.html"))
+
+
+# Codex ①：og 有內文但 title 不含 URL 作者（logged-out feed / 錯誤頁偽裝）→ exit 2，不產 partial
+WRONG_AUTHOR_OG = (
+    '<meta property="og:title" content="Threads" />'
+    '<meta property="og:description" content="&#x767b;入以查看更多內容" />'
+)
+
+
+def test_main_og_wrong_author_exits_2_no_partial(tmp_path, monkeypatch):
+    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: WRONG_AUTHOR_OG)
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path),
+    ])
+    assert rc == 2
+    # author guard 擋下 → 不得產出 partial 目錄，走 debug dump
+    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
+    assert out_dirs == []
+    assert list((tmp_path / "_debug").glob("*_nomatch.html"))

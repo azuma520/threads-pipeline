@@ -1,21 +1,36 @@
 """Fetch a Threads post + classified threads/replies via Playwright + Relay JSON.
 
+Uses a mobile browser fingerprint (MOBILE_UA + is_mobile) — since 2026-07
+Threads redirects anonymous *desktop* traffic to the logged-out feed.
+
+Fallback chain: when Relay data is unavailable, a single anonymous HTTP GET
+extracts og:title/og:description into a partial output (post.md frontmatter
+`partial: true`, meta.json `fetch_mode: "og_fallback"`, no relay.json).
+
+Exit codes: 0 = full success · 3 = partial (og fallback) · 2 = total failure
+(HTML dumped to drafts/library/_debug/ for schema-drift inspection) · 1 = bad URL.
+Callers (vault-side line-import / source-capture) can branch on exit code alone.
+NOTE: vault-side runners must be taught exit 3 separately (migration note in
+openspec/changes/fix-threads-fetcher/design.md §Migration Plan).
+
 Prototype usage:
 
     pip install -e ".[dev,prototype]"
     playwright install chromium
     python scripts/fetch_threads_post.py "https://www.threads.com/@user/post/CODE"
 
-Output: drafts/library/{YYYY-MM-DD}_{author}_{code}/{post.md, meta.json, screenshot.png}
+Output: drafts/library/{YYYY-MM-DD}_{author}_{code}/{post.md, meta.json, relay.json, screenshot.png}
 """
 from __future__ import annotations
 
 import argparse
 import datetime
+import html as _html_lib
 import json
 import pathlib
 import re
 import sys
+from html.parser import HTMLParser
 
 
 _URL_RE = re.compile(
@@ -94,6 +109,27 @@ def walk_posts(data) -> list[dict]:
     return found
 
 
+# 2026-07-05 起 Threads 對桌面匿名流量一律導向 logged-out feed；
+# 行動版 UA + is_mobile 實測仍可取得完整 Relay 資料（見 openspec change fix-threads-fetcher）。
+MOBILE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+)
+
+
+def mobile_context_kwargs() -> dict:
+    """Playwright new_context kwargs for anonymous mobile fetch (design D1).
+
+    抽成純函式使指紋契約可單測，無需 mock Chromium。刻意不含
+    storage_state / cookies——匿名鐵律。
+    """
+    return {
+        "user_agent": MOBILE_UA,
+        "viewport": {"width": 390, "height": 844},
+        "is_mobile": True,
+    }
+
+
 _RELAY_QUERY_MARKER = "BarcelonaPostPageDirectQuery"
 # I3: 匹配任何含 data-sjs 屬性的 <script>；屬性順序由 runtime 檢查以相容 Meta 變動。
 _SCRIPT_RE = re.compile(
@@ -135,6 +171,41 @@ def extract_relay_json(html: str) -> dict | None:
     return best
 
 
+class _OGMetaParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.og: dict[str, str] = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "meta":
+            return
+        d = dict(attrs)
+        prop = d.get("property", "")
+        if prop in ("og:title", "og:description") and d.get("content"):
+            self.og[prop[len("og:"):]] = d["content"]
+
+
+def extract_og_fields(html: str) -> dict | None:
+    """Extract og:title / og:description from raw post-page HTML.
+
+    og fallback 語意（design D2）：og:description 為必要欄位——缺失或空值
+    回 None（表示連降級內容都沒有）。內容經 HTML entity unescape。
+    屬性順序（property/content 誰在前）與單雙引號皆容忍（Codex ⑤）；用
+    stdlib html.parser 解析，故 content 內含 ASCII 單引號或 `>` 亦不截斷。
+    注意：og:description 可能被 Threads 截斷（實測 ~150 字）且不含作者自串；
+    author guard（是否採用 og）由 main() 依 og:title 判斷（design D7）。
+    """
+    parser = _OGMetaParser()
+    parser.feed(html)
+    desc = parser.og.get("description")
+    if not desc:
+        return None
+    return {
+        "title": _html_lib.unescape(parser.og.get("title", "")),
+        "description": _html_lib.unescape(desc),
+    }
+
+
 def filter_by_flags(
     posts_with_class: list[tuple[dict, str]],
     include_replies: bool,
@@ -147,6 +218,28 @@ def filter_by_flags(
     if include_self_replies:
         kept.add("C")
     return [(p, c) for p, c in posts_with_class if c in kept]
+
+
+def drop_foreign_main_posts(
+    posts_with_class: list[tuple[dict, str]],
+    main_author: str,
+) -> list[tuple[dict, str]]:
+    """Drop class-A nodes not authored by `main_author`.
+
+    行動版頁面會載入「相關串文」推薦區塊，他人的頂層非回覆貼文會被
+    classify 標成 A（見 test_classify_foreign_top_level_nonreply_returns_A）。
+    這些不是主文，不應進入輸出與 counts/segments 統計。
+
+    已知邊界（design D5 / Codex ③）：只擋「他人」A 段，擋不了「同作者但
+    非本串」的推薦貼文。實測 8 條未觀察到此情形——本 step 先做 username
+    過濾；code 錨定見 Step 3b 的 apply 時判斷。
+    """
+    return [
+        (p, c)
+        for p, c in posts_with_class
+        if c != "A"
+        or ((p.get("user") or {}).get("username") or "") == main_author
+    ]
 
 
 def _extract_snippet(post: dict) -> str:
@@ -200,11 +293,30 @@ def render_markdown(
     return "\n".join(lines)
 
 
+def render_partial_markdown(og: dict, meta: dict) -> str:
+    """Render a partial post.md from og fallback fields.
+
+    Frontmatter 與完整版共用 author/code/url/fetched_at 四鍵，
+    另加 `partial: true`（design D3）供下游辨識降級品質。
+    """
+    lines = ["---"]
+    for key in ("author", "code", "url", "fetched_at"):
+        lines.append(f"{key}: {meta[key]}")
+    lines.append("partial: true")
+    lines.append("---")
+    lines.append("")
+    lines.append(f"## [A] @{meta['author']} · {meta['code']} (og fallback)")
+    lines.append("")
+    lines.append(og["description"])
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_output(
     out_root: pathlib.Path,
     meta: dict,
     markdown: str,
-    relay_payload: dict,
+    relay_payload: dict | None,
     screenshot: bytes | None,
 ) -> pathlib.Path:
     """Write post.md / meta.json / relay.json / screenshot.png into
@@ -215,7 +327,8 @@ def write_output(
 
     B1 note: meta.json contains the summary only (author/code/url/fetched_at/
     counts/kept/segments). The raw Relay payload is written to `relay.json` as
-    a sibling, keeping meta.json human-readable and small.
+    a sibling, keeping meta.json human-readable and small. When `relay_payload`
+    is None (og fallback), relay.json is omitted.
     """
     date = meta["fetched_at"][:10]
     out_dir = out_root / f"{date}_{meta['author']}_{meta['code']}"
@@ -228,10 +341,11 @@ def write_output(
         encoding="utf-8",
     )
 
-    (out_dir / "relay.json").write_text(
-        json.dumps(relay_payload, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    if relay_payload is not None:
+        (out_dir / "relay.json").write_text(
+            json.dumps(relay_payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     if screenshot:
         (out_dir / "screenshot.png").write_bytes(screenshot)
@@ -242,14 +356,15 @@ def write_output(
 def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
     """Load `url` via headless chromium and return (html, screenshot_bytes_or_None).
 
-    Anonymous browsing — no cookies, no login. Waits for `networkidle` (≤30s).
+    Anonymous browsing — no cookies, no login. Mobile fingerprint — desktop
+    anonymous access is blocked since 2026-07. Waits for `networkidle` (≤30s).
     """
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
-            ctx = browser.new_context(viewport={"width": 1280, "height": 2000})
+            ctx = browser.new_context(**mobile_context_kwargs())
             page = ctx.new_page()
             page.goto(url, wait_until="networkidle", timeout=30_000)
             html = page.content()
@@ -257,6 +372,24 @@ def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
             return html, shot
         finally:
             browser.close()
+
+
+def fetch_og_fallback(url: str, timeout: float = 20.0) -> str | None:
+    """Single anonymous HTTP GET with mobile UA; returns HTML or None on error.
+
+    降級管道刻意不開 browser（design D2）：og meta 是伺服端渲染的 SEO
+    資產，純 GET 即可取得；任何網路/HTTP 錯誤一律回 None，由呼叫端
+    走既有 exit 2 路徑。
+    """
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"User-Agent": MOBILE_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -294,7 +427,29 @@ def main(argv: list[str] | None = None) -> int:
 
     relay = extract_relay_json(html)
     if relay is None:
-        # I4: Meta schema drift detection signal.
+        # 降級鏈（design D2/D4/D7）：主管道拿不到 Relay → 試 og fallback。
+        og_html = fetch_og_fallback(args.url)
+        og = extract_og_fields(og_html) if og_html else None
+        # D7 author guard：og:title 須含 (@url_author)，否則視為 logged-out
+        # feed / 錯誤頁偽裝，不得產 partial（避免掩蓋主管道壞損信號）。
+        if og is not None and f"(@{username})" in og.get("title", ""):
+            meta = {
+                "author": username,
+                "code": code,
+                "url": args.url,
+                "fetched_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                "fetch_mode": "og_fallback",
+                "og_title": og["title"],
+            }
+            md = render_partial_markdown(og, meta)
+            out_dir = write_output(args.out, meta, md, None, None)
+            print(
+                f"PARTIAL: relay unavailable, og fallback wrote {out_dir}",
+                file=sys.stderr,
+            )
+            return 3
+        # I4: Meta schema drift detection signal.（og 為 None 或未過 author
+        # guard 皆落此）
         debug_dir = args.out / "_debug"
         debug_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -312,6 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     posts = list(deduped.values())
 
     classified = [(p, classify(p, username)) for p in posts]
+    classified = drop_foreign_main_posts(classified, username)
     filtered = filter_by_flags(
         classified,
         include_replies=args.include_replies,
