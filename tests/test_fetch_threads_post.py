@@ -460,3 +460,19 @@ def test_extract_og_fields_missing_description_returns_none():
         )
         is None
     )
+
+
+def test_render_partial_markdown_has_partial_frontmatter():
+    og = {"title": "澤哥 (@lingyu9683) on Threads", "description": "內文摘要"}
+    meta = {
+        "author": "lingyu9683",
+        "code": "DISnS0JJywN",
+        "url": "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "fetched_at": "2026-07-05T12:00:00+00:00",
+    }
+    md = ftp.render_partial_markdown(og, meta)
+    head, body = md.split("---\n", 2)[1], md.split("---\n", 2)[2]
+    assert "partial: true" in head
+    assert "author: lingyu9683" in head
+    assert "內文摘要" in body
+    assert "og fallback" in body

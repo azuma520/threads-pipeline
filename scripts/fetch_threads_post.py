@@ -270,6 +270,25 @@ def render_markdown(
     return "\n".join(lines)
 
 
+def render_partial_markdown(og: dict, meta: dict) -> str:
+    """Render a partial post.md from og fallback fields.
+
+    Frontmatter 與完整版共用 author/code/url/fetched_at 四鍵，
+    另加 `partial: true`（design D3）供下游辨識降級品質。
+    """
+    lines = ["---"]
+    for key in ("author", "code", "url", "fetched_at"):
+        lines.append(f"{key}: {meta[key]}")
+    lines.append("partial: true")
+    lines.append("---")
+    lines.append("")
+    lines.append(f"## [A] @{meta['author']} · {meta['code']} (og fallback)")
+    lines.append("")
+    lines.append(og["description"])
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_output(
     out_root: pathlib.Path,
     meta: dict,
@@ -328,6 +347,24 @@ def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
             return html, shot
         finally:
             browser.close()
+
+
+def fetch_og_fallback(url: str, timeout: float = 20.0) -> str | None:
+    """Single anonymous HTTP GET with mobile UA; returns HTML or None on error.
+
+    降級管道刻意不開 browser（design D2）：og meta 是伺服端渲染的 SEO
+    資產，純 GET 即可取得；任何網路/HTTP 錯誤一律回 None，由呼叫端
+    走既有 exit 2 路徑。
+    """
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"User-Agent": MOBILE_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
 
 
 def main(argv: list[str] | None = None) -> int:
