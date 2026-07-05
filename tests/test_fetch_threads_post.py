@@ -424,3 +424,39 @@ def test_drop_foreign_main_posts_removes_foreign_A_keeps_rest():
 def test_drop_foreign_main_posts_missing_user_dropped():
     ghost = ({"pk": "g", "code": "G1", "caption": {"text": "x"}, "user": {}}, "A")
     assert ftp.drop_foreign_main_posts([ghost], "azuma") == []
+
+
+OG_FIXTURE = (
+    '<html><head>'
+    '<meta property="og:title" content="&#x6fa4;哥 (@lingyu9683) on Threads" />'
+    '<meta property="og:description" content="&#x6700;近&#x7684;&#x8cbc;&#x6587;&#x5167;&#x6587; line1&#x0a;line2" />'
+    '</head><body></body></html>'
+)
+
+# Codex ⑤：屬性順序反轉（content 在 property 前）+ 單引號，parser 須仍可解
+OG_FIXTURE_REORDERED = (
+    "<meta content='&#x6700;近&#x7684;&#x5167;&#x6587;' property='og:description'>"
+)
+
+
+def test_extract_og_fields_unescapes_entities():
+    og = ftp.extract_og_fields(OG_FIXTURE)
+    assert og is not None
+    assert og["title"].startswith("澤哥")
+    assert og["description"].startswith("最近的貼文內文 line1")
+
+
+def test_extract_og_fields_attr_order_and_single_quotes():
+    og = ftp.extract_og_fields(OG_FIXTURE_REORDERED)
+    assert og is not None
+    assert og["description"].startswith("最近的內文")
+
+
+def test_extract_og_fields_missing_description_returns_none():
+    assert ftp.extract_og_fields("<html><head></head></html>") is None
+    assert (
+        ftp.extract_og_fields(
+            '<meta property="og:description" content="" />'
+        )
+        is None
+    )

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import html as _html_lib
 import json
 import pathlib
 import re
@@ -154,6 +155,32 @@ def extract_relay_json(html: str) -> dict | None:
             best = parsed
             best_count = count
     return best
+
+
+_META_TAG_RE = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
+_OG_PROP_RE = re.compile(r"""property=["']og:(title|description)["']""", re.IGNORECASE)
+_OG_CONTENT_RE = re.compile(r"""content=["'](.*?)["']""", re.IGNORECASE | re.DOTALL)
+
+
+def extract_og_fields(html: str) -> dict | None:
+    """Extract og:title / og:description from raw post-page HTML.
+
+    og fallback 語意（design D2）：og:description 為必要欄位——缺失或空值
+    回 None（表示連降級內容都沒有）。內容經 HTML entity unescape。
+    屬性順序（property/content 誰在前）與單雙引號皆容忍（Codex ⑤）。
+    注意：og:description 可能被 Threads 截斷（實測 ~150 字）且不含作者自串；
+    author guard（是否採用 og）由 main() 依 og:title 判斷（design D7）。
+    """
+    found: dict[str, str] = {}
+    for tag in _META_TAG_RE.findall(html):
+        pm = _OG_PROP_RE.search(tag)
+        cm = _OG_CONTENT_RE.search(tag)
+        if pm and cm:
+            found[pm.group(1).lower()] = _html_lib.unescape(cm.group(1))
+    desc = found.get("description")
+    if not desc:
+        return None
+    return {"title": found.get("title", ""), "description": desc}
 
 
 def filter_by_flags(
