@@ -476,3 +476,16 @@ def test_render_partial_markdown_has_partial_frontmatter():
     assert "author: lingyu9683" in head
     assert "內文摘要" in body
     assert "og fallback" in body
+
+
+def test_write_output_none_relay_skips_relay_json(tmp_path):
+    meta = {
+        "author": "u1",
+        "code": "C1",
+        "url": "https://www.threads.net/@u1/post/C1",
+        "fetched_at": "2026-07-05T12:00:00+00:00",
+    }
+    out = ftp.write_output(tmp_path, meta, "# md", None, None)
+    assert (out / "post.md").exists()
+    assert (out / "meta.json").exists()
+    assert not (out / "relay.json").exists()

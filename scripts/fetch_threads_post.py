@@ -293,7 +293,7 @@ def write_output(
     out_root: pathlib.Path,
     meta: dict,
     markdown: str,
-    relay_payload: dict,
+    relay_payload: dict | None,
     screenshot: bytes | None,
 ) -> pathlib.Path:
     """Write post.md / meta.json / relay.json / screenshot.png into
@@ -304,7 +304,8 @@ def write_output(
 
     B1 note: meta.json contains the summary only (author/code/url/fetched_at/
     counts/kept/segments). The raw Relay payload is written to `relay.json` as
-    a sibling, keeping meta.json human-readable and small.
+    a sibling, keeping meta.json human-readable and small. When `relay_payload`
+    is None (og fallback), relay.json is omitted.
     """
     date = meta["fetched_at"][:10]
     out_dir = out_root / f"{date}_{meta['author']}_{meta['code']}"
@@ -317,10 +318,11 @@ def write_output(
         encoding="utf-8",
     )
 
-    (out_dir / "relay.json").write_text(
-        json.dumps(relay_payload, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    if relay_payload is not None:
+        (out_dir / "relay.json").write_text(
+            json.dumps(relay_payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     if screenshot:
         (out_dir / "screenshot.png").write_bytes(screenshot)
