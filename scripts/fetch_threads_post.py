@@ -4,15 +4,17 @@ Main path uses an authenticated persistent-profile Chromium context (no mobile
 UA spoof) — since 2026-07 Threads redirects anonymous *desktop* traffic to the
 logged-out feed, so fetches rely on a logged-in browser profile instead.
 
-Fallback chain: when Relay data is unavailable, a single anonymous HTTP GET
-fetches og meta only to check for a login wall (no partial output is ever
-produced — og fallback content is too degraded to trust; see Task 4).
+Relay 缺席一律視為內容失敗（死貼文/重導/schema drift），直接 exit 2——不再有匿名
+og 降級診斷（2026-07-12 dogfood 移除：匿名請求對貼文頁一律回登入牆，零資訊量，
+且會把死貼文誤報成 auth 失效；auth 失效已由主抓取的 FetchResult.auth_status
+上游攔截）。
 
-Exit codes: 0 = full success · 2 = total failure (HTML optionally dumped to
-drafts/library/_debug/ via --debug-dump for schema-drift inspection) ·
+Exit codes: 0 = full success · 2 = total failure (relay missing; HTML
+optionally dumped to drafts/library/_debug/ via --debug-dump for schema-drift
+inspection; redirect-away-from-post cases also print a GONE hint on stderr) ·
 1 = bad args (bad URL, missing URL, unknown/conflicting flags — argparse usage
 errors included) · 4 = auth required (login session invalid/missing, detected
-either from the main fetch or from the anonymous og fallback) ·
+from the main fetch's FetchResult.auth_status) ·
 5 = operational failure (profile lock in use, I/O error, browser engine error —
 NOT a stand-in for programming bugs like TypeError/KeyError/AssertionError).
 Callers (vault-side line-import / source-capture) can branch on exit code alone.
@@ -115,15 +117,6 @@ def walk_posts(data) -> list[dict]:
 
     _walk(data)
     return found
-
-
-# 2026-07-05 起 Threads 對桌面匿名流量一律導向 logged-out feed。主抓取路徑已改用
-# 登入態 persistent context（見 authenticated_context_kwargs），不再靠行動 UA 偽裝；
-# 本常數僅供 fetch_og_fallback 的匿名 HTTP GET 使用。
-MOBILE_UA = (
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
-    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-)
 
 
 def authenticated_context_kwargs() -> dict:
@@ -482,24 +475,6 @@ def fetch_page(
         lock.release()
 
 
-def fetch_og_fallback(url: str, timeout: float = 20.0) -> str | None:
-    """Single anonymous HTTP GET with mobile UA; returns HTML or None on error.
-
-    降級管道刻意不開 browser（design D2）：og meta 是伺服端渲染的 SEO
-    資產，純 GET 即可取得；任何網路/HTTP 錯誤一律回 None，由呼叫端
-    走既有 exit 2 路徑。
-    """
-    import urllib.error
-    import urllib.request
-
-    req = urllib.request.Request(url, headers={"User-Agent": MOBILE_UA})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, OSError, ValueError):
-        return None
-
-
 def run_login(profile_dir: pathlib.Path) -> int:
     """Headed login flow: open the persistent profile at /login and wait for
     the user to complete auth (incl. 2FA) before closing the context.
@@ -649,18 +624,12 @@ def _run(argv: list[str] | None = None) -> int:
 
     relay = extract_relay_json(html)
     if relay is None:
-        # 降級鏈（design D2/D4）：主管道拿不到 Relay → 試 og fallback，
-        # 僅用來偵測「連匿名 og 都看到登入牆」——不再產 partial 輸出（Task 4）。
-        og_html = fetch_og_fallback(args.url)
-        # 必須傳 requested_url，否則 og:url 首頁的情境化訊號不啟用，
-        # 「僅 og:url 首頁」的登入牆會錯回 exit 2 而非 exit 4。
-        # 注意：這裡 final_url 等同 requested_url（urllib GET 不追蹤 redirect
-        # 後的實際 URL，final_url 參數直接吃 args.url）——故 _AUTH_PATH_RE
-        # 與「req_code not in final_url」這兩條路徑訊號在本分支天然 inert，
-        # 實際判斷靠 og:title 登入字樣 / og:url 首頁 / 登入表單這三條訊號。
-        if og_html and detect_auth_failure(args.url, og_html, requested_url=args.url) == "auth_required":
-            print("AUTH: anonymous og shows login wall — re-run with --login", file=sys.stderr)
-            return 4
+        # 登入態下 relay 缺席 = 內容問題（死貼文/重導/schema drift），非 auth——
+        # auth 失效已由上游 result.auth_status 攔截（exit 4）。匿名 og 診斷已移除：
+        # 2026 起匿名請求對貼文頁一律回登入牆，該訊號零資訊量（2026-07-12 dogfood）。
+        if code not in result.final_url:
+            print(f"GONE: redirected away from post (final_url={result.final_url}) — "
+                  f"post likely deleted or restricted", file=sys.stderr)
         # I4: Meta schema drift detection signal（僅 --debug-dump 時落檔）。
         if args.debug_dump:
             debug_dir = args.out / "_debug"

@@ -191,8 +191,8 @@ Exit code（呼叫端只需依 code 分支，不需解析 stderr）：
 |------|------|
 | 0 | 該模式成功（一般抓取完成 / `--auth-check-only` 判定已登入 / `--login` 流程結束） |
 | 1 | 參數錯（缺 URL、URL 格式錯、`--login`/`--auth-check-only` 旗標衝突、argparse usage error） |
-| 2 | 內容失敗（抓不到 Relay JSON，且匿名 og fallback 也未顯示登入牆——不再產 partial 輸出） |
-| 4 | 需登入（session 失效或缺失；主抓取或匿名 og fallback 皆可能觸發，需重跑 `--login`） |
+| 2 | 內容失敗（抓不到 Relay JSON——死貼文/重導/schema drift；重導離開貼文時 stderr 附 GONE 提示。og fallback 診斷已移除 2026-07-12：匿名請求對貼文頁一律回登入牆，零資訊量且會誤報死貼文為 auth 失效） |
+| 4 | 需登入（session 失效或缺失，由主抓取 `FetchResult.auth_status` 判定，需重跑 `--login`） |
 | 5 | operational 失敗（profile lock 被佔用、I/O 錯誤、瀏覽器引擎錯誤——非程式缺陷，TypeError/KeyError 等仍會照常炸出） |
 
 ## Available Skills

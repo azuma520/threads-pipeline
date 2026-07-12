@@ -612,11 +612,12 @@ def _fake_fetch(url, screenshot=True, *, profile_dir=None, headless=False):
     return ftp.FetchResult(html=NO_RELAY_HTML, screenshot=None, final_url=url, auth_status="ok")
 
 
-def test_main_og_no_longer_produces_partial(tmp_path, monkeypatch):
-    # Task 4: og fallback 不再產 partial（品質太差不可信）。relay 失敗 +
-    # og 有內文但非登入牆 → exit 2，且完全不建立輸出目錄。
+def test_main_relay_miss_exits_2_no_partial(tmp_path, monkeypatch):
+    # og fallback 已徹底移除（2026-07-12 dogfood）：relay 失敗一律 exit 2，
+    # 不建立任何輸出目錄（合併原 test_main_og_no_longer_produces_partial /
+    # test_main_og_non_login_wall_content_exits_2_no_partial——og 內容種類
+    # 不再影響結果，兩者現在測的是同一件事）。
     monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
-    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: OG_FIXTURE)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
         "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
@@ -626,27 +627,9 @@ def test_main_og_no_longer_produces_partial(tmp_path, monkeypatch):
     assert out_dirs == []  # 無 partial 目錄
 
 
-def test_main_og_fallback_login_wall_exits_4(tmp_path, monkeypatch):
-    # og fallback 僅 og:url 首頁（無 title/form）→ 需情境化訊號（requested_url）
-    # 才判為登入牆 → exit 4
+def test_main_relay_miss_exits_2_with_debug_dump(tmp_path, monkeypatch):
+    # --debug-dump 有給時，relay 失敗要落 debug html
     monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
-    monkeypatch.setattr(
-        ftp, "fetch_og_fallback",
-        lambda url: '<meta property="og:url" content="https://www.threads.com/" />',
-    )
-    rc = ftp.main([
-        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
-        "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
-    ])
-    assert rc == 4
-    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name not in ("_debug", "p")]
-    assert out_dirs == []
-
-
-def test_main_og_also_dead_exits_2_with_debug_dump(tmp_path, monkeypatch):
-    # --debug-dump 有給時，relay+og 皆失敗要落 debug html
-    monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
-    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: None)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
         "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
@@ -659,7 +642,6 @@ def test_main_og_also_dead_exits_2_with_debug_dump(tmp_path, monkeypatch):
 def test_main_debug_dump_off_by_default_no_debug_file(tmp_path, monkeypatch):
     # Task 4: debug dump 改 gated——不給 --debug-dump 時，即使內容失敗也不得寫檔
     monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
-    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: None)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
         "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
@@ -668,24 +650,22 @@ def test_main_debug_dump_off_by_default_no_debug_file(tmp_path, monkeypatch):
     assert not (tmp_path / "_debug").exists()
 
 
-# og 有內文但不是登入牆（也不含明確作者/貼文訊號）→ 落一般失敗 exit 2，不產 partial
-WRONG_AUTHOR_OG = (
-    '<meta property="og:title" content="Threads" />'
-    '<meta property="og:description" content="&#x767b;入以查看更多內容" />'
-)
-
-
-def test_main_og_non_login_wall_content_exits_2_no_partial(tmp_path, monkeypatch):
-    monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
-    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: WRONG_AUTHOR_OG)
+def test_main_dead_post_redirect_exits_2_not_4(tmp_path, monkeypatch):
+    # dogfood 回歸（2026-07-12）：登入態抓已刪貼文 → 重導作者頁、無 relay →
+    # exit 2（內容失敗），不得誤報 exit 4（舊 og 診斷會誤報，見 hotfix 2）。
+    def _fake(url, screenshot=True, *, profile_dir=None, headless=False):
+        return ftp.FetchResult(
+            html='<script>{"NON_FACEBOOK_USER_ID":"17841464204254967"}</script>',
+            screenshot=None,
+            final_url="https://www.threads.com/@leen_0622",
+            auth_status="ok",
+        )
+    monkeypatch.setattr(ftp, "fetch_page", _fake)
     rc = ftp.main([
-        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "https://www.threads.net/@leen_0622/post/DVi7YOHk8vV",
         "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
     ])
     assert rc == 2
-    # og 內容判不出登入牆 → 不得產出 partial 目錄（partial 已徹底移除）
-    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name not in ("_debug", "p")]
-    assert out_dirs == []
 
 
 # --- Task 3: CLI 契約（url 可選 + exit 4/5） ---
