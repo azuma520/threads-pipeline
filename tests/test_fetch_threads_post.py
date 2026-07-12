@@ -726,6 +726,15 @@ def test_main_login_does_not_fetch(tmp_path, monkeypatch):
     assert ftp.main(["--login", "--profile", str(tmp_path / "p")]) == 0
 
 
+def test_main_login_operational_failure_exits_5(tmp_path, monkeypatch):
+    # --login 路徑的 operational 例外（e.g. profile lock）也須經 main wrapper 轉 5，
+    # 不只是一般抓取路徑（見 test_main_operational_failure_exits_5）。
+    def _boom(profile_dir):
+        raise RuntimeError("locked")
+    monkeypatch.setattr(ftp, "run_login", _boom)
+    assert ftp.main(["--login", "--profile", str(tmp_path / "p")]) == 5
+
+
 def test_main_auth_check_logged_in_exits_0(tmp_path, monkeypatch):
     # 已登入首頁：無登入表單 → 0
     def _fake(url, screenshot=True, *, profile_dir=None, headless=False):

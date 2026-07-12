@@ -371,7 +371,7 @@ def write_output(
     B1 note: meta.json contains the summary only (author/code/url/fetched_at/
     counts/kept/segments). The raw Relay payload is written to `relay.json` as
     a sibling, keeping meta.json human-readable and small. When `relay_payload`
-    is None (og fallback), relay.json is omitted.
+    is None, relay.json is omitted (covered by unit tests).
     """
     date = meta["fetched_at"][:10]
     out_dir = out_root / f"{date}_{meta['author']}_{meta['code']}"
@@ -643,7 +643,11 @@ def _run(argv: list[str] | None = None) -> int:
         # 僅用來偵測「連匿名 og 都看到登入牆」——不再產 partial 輸出（Task 4）。
         og_html = fetch_og_fallback(args.url)
         # 必須傳 requested_url，否則 og:url 首頁的情境化訊號不啟用，
-        # 「僅 og:url 首頁」的登入牆會錯回 exit 2 而非 exit 4
+        # 「僅 og:url 首頁」的登入牆會錯回 exit 2 而非 exit 4。
+        # 注意：這裡 final_url 等同 requested_url（urllib GET 不追蹤 redirect
+        # 後的實際 URL，final_url 參數直接吃 args.url）——故 _AUTH_PATH_RE
+        # 與「req_code not in final_url」這兩條路徑訊號在本分支天然 inert，
+        # 實際判斷靠 og:title 登入字樣 / og:url 首頁 / 登入表單這三條訊號。
         if og_html and detect_auth_failure(args.url, og_html, requested_url=args.url) == "auth_required":
             print("AUTH: anonymous og shows login wall — re-run with --login", file=sys.stderr)
             return 4
