@@ -2,44 +2,59 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 與用戶溝通：白話、清晰、不廢話
+
+**範圍**：對話 + 寫給 user 看的所有文件（angle.md / spec / plan / draft / handoff / 訊息全部）。不只「跟 user 對話」這一層，**任何 user 會看到的輸出都算**。
+
+**規則**：
+- 不用英文 jargon（除非是廣泛使用的技術詞，如 API / CLI / JSON / PR）
+- 不用對話內生成的縮寫（這次對話形成的詞，沒接觸過的 reader 看不懂）
+- 不用「翻轉瞬間 / 反向關係 / inside view / default 路徑 / inversion / framing」這類翻譯腔詞
+- 工程細節 opt-in：user 沒問就不寫；要寫先問「要我細說 X 嗎？」
+- 寫完唸一次：用一個沒看過本 session 的 reader 來讀，他每個詞應該秒懂
+
+**為什麼重要**：違反一次 = user 要 catch、要我重寫 = 浪費 user 時間。N=4+ active deployment（含 angle.md 這層）。
+
 ## Session 開工規則
 
 **每次 session 開始時，在回應用戶第一個任務之前，必須：**
 
-1. **讀今日/最新 handoff 的「七、收工回寫」** — 看接力棒（上個 session 留言「下個 session 開工先做 X」）
-   - 路徑：`docs/handoffs/session-handoff-{YYYYMMDD}.md`
+1. **讀今日/最新 handoff 的「七、下一步建議」** — 看接力棒（上個 session 留言「下個 session 開工先做 X」）
+   - 路徑：`文檔/handoff/session-handoff-{YYYYMMDD}.md`
    - 每天只有一份，每個 session 是一個 `## Session HH:MM` 區塊
+   - 歷史檔（2026-05-13 以前用舊七欄）仍在同路徑，「七、收工回寫」對應現在的「七、下一步建議」
 2. **讀 memory** `project_progress_{YYYYMMDD}.md`（若存在）— Claude 跨 session 專用的進度摘要
 3. 告訴用戶：「最新接力棒寫 X；要繼續還是先做你剛說的？」
 4. 用戶決定優先級後再動手
 
 不可以跳過這些步驟直接開工。
 
-## Handoff 格式（每日 append-only）
+## Handoff 格式（每日 append-only，workflow-harness 規範）
 
-**檔名**：`docs/handoffs/session-handoff-{YYYYMMDD}.md`
+**檔名**：`文檔/handoff/session-handoff-{YYYYMMDD}.md`
 
-**規則**：同一天所有 session 寫在同一份檔案。每個 session 結束時 append 一個 `## Session HH:MM` 區塊。**禁止修改前面 session 的內容**。
+**規則**：同一天所有 session 寫在同一份檔案。每個 session 結束時 append 一個 `## Session HH:MM` 區塊。**禁止修改前面 session 的內容**（typo 例外，結構性內容不可動）。
 
-每個 Session 區塊包含七個欄位：
+每個 Session 區塊包含七個欄位（順序固定，workflow-harness stop hook 會檢查最新 Session 區塊的七個 heading 是否齊全）：
 
 | 欄位 | 必填？ | 寫什麼 | 不寫什麼 |
 |------|--------|--------|---------|
-| 一、今日聚焦 | ✅ | 今天要推進的主線項目 | — |
-| 二、完成事項 | ✅ | 具體做了什麼，盡量量化 | 不寫過程流水帳 |
-| 三、洞見紀錄 | 可「無」 | 過程中發現的心得、經驗（對人和 AI 都有用） | 不重複已存在的 memory |
-| 四、阻塞/卡點 | 可「無」 | 想做但做不了的事 | — |
-| 五、行動複盤 | 可「無」 | 工作方式/流程的改進反省 | 不寫自我感覺良好的廢話 |
-| 六、檔案異動 | ✅ | 新增/搬移/刪除了什麼檔案 | 不列沒改的檔案 |
-| 七、收工回寫 | ✅ | (1) `memory/project_progress_{YYYYMMDD}.md` 建立或更新；(2) `memory/MEMORY.md` 索引同步；(3) 下次 session 的 next action 提示 | — |
+| 一、本 session 主題 | ✅ | 一句話：這個 session 的目標 / 上下文 | — |
+| 二、完成事項 | ✅ | 本 session 已完成的任務 bullet list（TaskCreate 已完成項自動帶入） | 不寫過程流水帳 |
+| 三、未完事項 / 接力棒 | ✅ | 下次 session 接續做的事（TaskCreate 未完項 + 使用者補） | — |
+| 四、洞見 / 阻塞 | ✅ | 學到什麼、卡在哪（agent 寫初稿 → 使用者 review） | 不重複已存在的 memory |
+| 五、複盤 | ✅ | 哪裡做得好 / 不好 / 下次怎麼改（agent 寫初稿 → 使用者 review） | 不寫自我感覺良好的廢話 |
+| 六、檔案異動 | ✅ | 改動的檔案路徑 + 一句話描述（`git log --since=` 自動帶入） | 不列沒改的檔案 |
+| 七、下一步建議 | ✅ | 下次 session 開工該做什麼（agent 寫初稿、使用者 review） + memory `project_progress_{YYYYMMDD}.md` 建立或更新 + `MEMORY.md` 索引同步 | — |
 
-Stop hook 會擋：沒建檔、或最新 Session 區塊缺欄位，session 不准結束。
+Stop hook 會擋：沒建檔、或最新 Session 區塊缺七欄任一 heading，session 不准結束。
 
 ## 記憶系統與 handoff 的分工
 
-- **handoff**（`docs/handoffs/`）：專案內、git 可追蹤、人讀用、append-only
+- **handoff**（`文檔/handoff/`）：專案內、git 可追蹤、人讀用、append-only
 - **memory**（`~/.claude/projects/.../memory/`）：跨專案 Claude 載入、指針式、可刪改
 - 兩者互補，不是擇一。handoff 是「這天具體做了什麼」的人類紀錄；memory 是「下次 Claude 開 session 要記得的事」的 AI context
+- memory 同步動作寫進 handoff 第七欄「下一步建議」一起 surface
 
 ## Project Overview
 
@@ -200,6 +215,8 @@ Exit code（呼叫端只需依 code 分支，不需解析 stderr）：
 - **threads-algorithm-skill** (`/threads-algorithm-skill`) — Threads/Meta 社群經營顧問，基於 26 個 Meta 演算法專利機制，提供內容策略建議。來源：`azuma520/threads-algorithm-skill`
 - **threads-cli** — `threads` CLI 與 `threads-advisor` 操作手冊。Agent 執行 Threads 帳號操作（發文、查數據、刪文、審查草稿）時自動參考。Skill 檔案：`skills/threads-cli/SKILL.md`
 - **threads-angle-gate** — C 路線第 1 層「選角度 Gate」草案。使用者要寫 Threads 貼文但還沒想清楚切入點時用；訪談者+共創者模式，AI 只用「發問」和「總結+詢問」兩種發言形式，產出 `drafts/<slug>.angle.md`。Skill 檔案：`skills/threads-angle-gate/SKILL.md`
+- **threads-write-post**（v2，2026-05-04）— Stage 1–7 寫貼文 pipeline。從 `angle.md` 出發，跑 選框架 → 規畫骨架 → 演算法 mapping → 互動設計 → 寫稿 → 讀稿 → 發文。內含 Pipeline Iron Law、Stage Entry Template、6 份 stage reference（conditional loading；v2 新增 `writing-philosophy.md` 軸心 reference + Stage 1 框架庫擴充 Narrative-arc/Thesis-argumentation + Stage 5 字句層 Lint），取代 `docs/dev/advisor-pipeline-schema.md`（已 deprecate）。前置：必須先跑 `threads-angle-gate` 拿到 angle.md。Skill 檔案：`skills/threads-write-post/SKILL.md`
+- **threads-write-flow**（v3，2026-05-07，dump-first）— Step 1–9 寫貼文 pipeline，從 user 原始 dump 開始（不需要 angle.md）。Stage 1（dump、AI 不打斷）→ 2（主線 + 錨點）→ 2.5（諮詢式訪談補充）→ 3（優缺診斷）→ 4（敘事草稿）→ 5（鉤子）→ 6（user 校準）→ 7（修文）→ 8（反模板化）→ 9（多版本）。三條核心軸：訪談原則 + 刪除法 / sense > 機械、機械只是訊號 / 諮詢 + 沒有就沒有。Skill 檔案：`skills/threads-write-flow/SKILL.md`。前置：none（不需 angle）。跟 `threads-write-post` v2 並存（v2 從 angle 接 Stage 1、本 skill 從 dump 接 Step 1）。
 
 ## Dependencies
 
