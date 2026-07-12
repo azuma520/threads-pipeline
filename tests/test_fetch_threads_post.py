@@ -383,15 +383,11 @@ def test_classify_foreign_top_level_nonreply_returns_A():
     assert ftp.classify(foreign, "main_author") == "A"
 
 
-def test_mobile_context_kwargs_is_anonymous_mobile():
-    kw = ftp.mobile_context_kwargs()
-    assert kw["user_agent"] == ftp.MOBILE_UA
-    assert "iPhone" in ftp.MOBILE_UA
-    assert kw["viewport"] == {"width": 390, "height": 844}
-    assert kw["is_mobile"] is True
-    # 匿名鐵律：絕不帶登入態
-    assert "storage_state" not in kw
-    assert "cookies" not in kw
+def test_authenticated_context_kwargs_no_mobile_spoof():
+    kw = ftp.authenticated_context_kwargs()
+    assert "user_agent" not in kw or "iPhone" not in kw.get("user_agent", "")
+    assert kw.get("is_mobile") is not True
+    assert kw.get("locale") == "zh-TW"
 
 
 def _mk(username, code, is_reply=False, reply_to=None):
@@ -554,6 +550,19 @@ def test_default_profile_dir_under_localappdata(monkeypatch, tmp_path):
     assert p == tmp_path / "threads-pipeline" / "threads-profile"
 
 
+def test_profile_lock_rejects_concurrent(tmp_path):
+    ftp.ProfileLock(tmp_path).acquire()
+    with pytest.raises(RuntimeError, match="in use"):
+        ftp.ProfileLock(tmp_path).acquire()
+
+
+def test_profile_lock_release_allows_reacquire(tmp_path):
+    lock = ftp.ProfileLock(tmp_path)
+    lock.acquire()
+    lock.release()
+    ftp.ProfileLock(tmp_path).acquire()  # 不 raise
+
+
 def test_render_partial_markdown_has_partial_frontmatter():
     og = {"title": "澤哥 (@lingyu9683) on Threads", "description": "內文摘要"}
     meta = {
@@ -586,8 +595,12 @@ def test_write_output_none_relay_skips_relay_json(tmp_path):
 NO_RELAY_HTML = "<html><head></head><body>logged out feed</body></html>"
 
 
+def _fake_fetch(url, screenshot=True, *, profile_dir=None, headless=False):
+    return ftp.FetchResult(html=NO_RELAY_HTML, screenshot=None, final_url=url, auth_status="ok")
+
+
 def test_main_og_fallback_exits_3(tmp_path, monkeypatch):
-    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
     monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: OG_FIXTURE)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
@@ -603,7 +616,7 @@ def test_main_og_fallback_exits_3(tmp_path, monkeypatch):
 
 
 def test_main_og_also_dead_exits_2_with_debug_dump(tmp_path, monkeypatch):
-    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
     monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: None)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
@@ -621,7 +634,7 @@ WRONG_AUTHOR_OG = (
 
 
 def test_main_og_wrong_author_exits_2_no_partial(tmp_path, monkeypatch):
-    monkeypatch.setattr(ftp, "fetch_page", lambda url, screenshot=True: (NO_RELAY_HTML, None))
+    monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
     monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: WRONG_AUTHOR_OG)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",

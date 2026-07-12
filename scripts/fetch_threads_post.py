@@ -1,14 +1,16 @@
 """Fetch a Threads post + classified threads/replies via Playwright + Relay JSON.
 
-Uses a mobile browser fingerprint (MOBILE_UA + is_mobile) — since 2026-07
-Threads redirects anonymous *desktop* traffic to the logged-out feed.
+Main path uses an authenticated persistent-profile Chromium context (no mobile
+UA spoof) — since 2026-07 Threads redirects anonymous *desktop* traffic to the
+logged-out feed, so fetches rely on a logged-in browser profile instead.
 
 Fallback chain: when Relay data is unavailable, a single anonymous HTTP GET
 extracts og:title/og:description into a partial output (post.md frontmatter
 `partial: true`, meta.json `fetch_mode: "og_fallback"`, no relay.json).
 
 Exit codes: 0 = full success · 3 = partial (og fallback) · 2 = total failure
-(HTML dumped to drafts/library/_debug/ for schema-drift inspection) · 1 = bad URL.
+(HTML dumped to drafts/library/_debug/ for schema-drift inspection) · 1 = bad URL ·
+4 = auth required (login session invalid/missing).
 Callers (vault-side line-import / source-capture) can branch on exit code alone.
 NOTE: vault-side runners must be taught exit 3 separately (migration note in
 openspec/changes/fix-threads-fetcher/design.md §Migration Plan).
@@ -113,25 +115,21 @@ def walk_posts(data) -> list[dict]:
     return found
 
 
-# 2026-07-05 起 Threads 對桌面匿名流量一律導向 logged-out feed；
-# 行動版 UA + is_mobile 實測仍可取得完整 Relay 資料（見 openspec change fix-threads-fetcher）。
+# 2026-07-05 起 Threads 對桌面匿名流量一律導向 logged-out feed。主抓取路徑已改用
+# 登入態 persistent context（見 authenticated_context_kwargs），不再靠行動 UA 偽裝；
+# 本常數僅供 fetch_og_fallback 的匿名 HTTP GET 使用。
 MOBILE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
 )
 
 
-def mobile_context_kwargs() -> dict:
-    """Playwright new_context kwargs for anonymous mobile fetch (design D1).
+def authenticated_context_kwargs() -> dict:
+    """Context kwargs for authenticated persistent-profile fetch (design D2).
 
-    抽成純函式使指紋契約可單測，無需 mock Chromium。刻意不含
-    storage_state / cookies——匿名鐵律。
+    棄行動 UA 偽裝（登入態下跨引擎不一致＝風控訊號）；僅固定 locale/timezone。
     """
-    return {
-        "user_agent": MOBILE_UA,
-        "viewport": {"width": 390, "height": 844},
-        "is_mobile": True,
-    }
+    return {"locale": "zh-TW", "timezone_id": "Asia/Taipei"}
 
 
 _RELAY_QUERY_MARKER = "BarcelonaPostPageDirectQuery"
@@ -428,25 +426,67 @@ def _default_profile_dir() -> pathlib.Path:
     return pathlib.Path(base) / "threads-pipeline" / "threads-profile"
 
 
-def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
-    """Load `url` via headless chromium and return (html, screenshot_bytes_or_None).
+class ProfileLock:
+    """單實例鎖（design Risk）：lockfile 而非 Chromium SingletonLock（異常終止殘留）。"""
 
-    Anonymous browsing — no cookies, no login. Mobile fingerprint — desktop
-    anonymous access is blocked since 2026-07. Waits for `networkidle` (≤30s).
-    """
+    def __init__(self, profile_dir: pathlib.Path):
+        self._path = pathlib.Path(profile_dir) / ".threads_fetch.lock"
+
+    def acquire(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(self._path, "x") as fd:
+                fd.write(datetime.datetime.now(datetime.UTC).isoformat())
+        except FileExistsError as exc:
+            raise RuntimeError(
+                f"profile {self._path.parent} in use (lock {self._path}); "
+                f"確認無其他 fetcher 執行後手動刪除 lock 檔"
+            ) from exc
+
+    def release(self) -> None:
+        self._path.unlink(missing_ok=True)
+
+
+def fetch_page(
+    url: str,
+    screenshot: bool = True,
+    *,
+    profile_dir: pathlib.Path | None = None,
+    headless: bool = False,
+) -> FetchResult:
+    """Load `url` via authenticated persistent-profile chromium (design D1/D2)."""
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            ctx = browser.new_context(**mobile_context_kwargs())
-            page = ctx.new_page()
-            page.goto(url, wait_until="networkidle", timeout=30_000)
-            html = page.content()
-            shot = page.screenshot(full_page=False) if screenshot else None
-            return html, shot
-        finally:
-            browser.close()
+    profile_dir = profile_dir or _default_profile_dir()
+    lock = ProfileLock(profile_dir)
+    lock.acquire()
+    try:
+        with sync_playwright() as p:
+            ctx = p.chromium.launch_persistent_context(
+                user_data_dir=str(pathlib.Path(profile_dir).resolve()),
+                headless=headless,
+                **authenticated_context_kwargs(),
+            )
+            try:
+                page = ctx.new_page()
+                page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                # 輪詢至 Relay payload 出現或逾時，不在首個 data-sjs 即擷取
+                html = page.content()
+                deadline = 8_000
+                waited = 0
+                while extract_relay_json(html) is None and waited < deadline:
+                    page.wait_for_timeout(500)
+                    waited += 500
+                    html = page.content()
+                final_url = page.url
+                shot = page.screenshot(full_page=False) if screenshot else None
+                auth = detect_auth_failure(final_url, html, requested_url=url) or "ok"
+                return FetchResult(html=html, screenshot=shot,
+                                   final_url=final_url, auth_status=auth)
+            finally:
+                ctx.close()
+    finally:
+        lock.release()
 
 
 def fetch_og_fallback(url: str, timeout: float = 20.0) -> str | None:
@@ -498,7 +538,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"Fetching {args.url} ...", file=sys.stderr)
-    html, shot = fetch_page(args.url, screenshot=not args.no_screenshot)
+    result = fetch_page(args.url, screenshot=not args.no_screenshot)
+    if result.auth_status == "auth_required":
+        print("AUTH: login session invalid — re-run with --login", file=sys.stderr)
+        return 4
+    html, shot = result.html, result.screenshot
 
     relay = extract_relay_json(html)
     if relay is None:
