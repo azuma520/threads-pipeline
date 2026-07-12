@@ -45,3 +45,6 @@ docs/superpowers/
 
 # 歸檔區（本地暫存；待 user 手動清）
 .archive/
+
+# Git worktrees（superpowers 隔離工作區）
+.worktrees/
