@@ -27,10 +27,14 @@ import argparse
 import datetime
 import html as _html_lib
 import json
+import os
 import pathlib
 import re
 import sys
+import urllib.parse as _urlparse
+from dataclasses import dataclass
 from html.parser import HTMLParser
+from typing import Literal
 
 
 _URL_RE = re.compile(
@@ -181,7 +185,7 @@ class _OGMetaParser(HTMLParser):
             return
         d = dict(attrs)
         prop = d.get("property", "")
-        if prop in ("og:title", "og:description") and d.get("content"):
+        if prop in ("og:title", "og:description", "og:url") and d.get("content"):
             self.og[prop[len("og:"):]] = d["content"]
 
 
@@ -204,6 +208,64 @@ def extract_og_fields(html: str) -> dict | None:
         "title": _html_lib.unescape(parser.og.get("title", "")),
         "description": _html_lib.unescape(desc),
     }
+
+
+def extract_og_meta(html: str) -> dict:
+    """Return og title/description/url (unescaped); missing keys omitted.
+
+    與 extract_og_fields 不同：不把「缺 description」當 None——detect_auth_failure
+    只需 title/url，登入牆頁面常無 description。沿用 _OGMetaParser 故容忍
+    屬性順序與單雙引號（既有 test_extract_og_fields_* 契約）。
+    """
+    parser = _OGMetaParser()
+    parser.feed(html)
+    return {k: _html_lib.unescape(v) for k, v in parser.og.items()}
+
+
+_LOGIN_TITLE_RE = re.compile(r"log ?in|登入", re.IGNORECASE)
+_AUTH_PATH_RE = re.compile(r"^/(login|checkpoint|challenge)(/|$)", re.IGNORECASE)
+_LOGIN_FORM_RE = re.compile(r"""type=['\"]password['\"]|name=['\"]password['\"]""", re.IGNORECASE)
+_THREADS_HOSTS = {"www.threads.com", "threads.com", "www.threads.net", "threads.net"}
+
+
+def _is_threads_homepage(url: str) -> bool:
+    p = _urlparse.urlparse(url)
+    return p.netloc in _THREADS_HOSTS and (p.path or "/") == "/"
+
+
+def detect_auth_failure(final_url: str, html: str, *, requested_url: str | None = None) -> str | None:
+    """Return "auth_required" if the page is a login wall / checkpoint, else None.
+
+    通用訊號（兩情境皆安全）：final URL 為 /login|/checkpoint|/challenge、
+    og:title 登入字樣、頁面含登入表單。
+
+    情境化訊號（僅當 requested_url 是「貼文」時啟用，Review C1/M1）：og:url 指向
+    首頁、或 final_url 已不含 requested 貼文 code——代表抓貼文被重導離開。
+    auth-check 模式 goto 首頁（requested 非貼文）**不**觸發這兩條，故已登入首頁
+    （og:url=首頁、無表單）正確回 None，不誤判（Review C1）。
+
+    刻意不採「final URL 落在首頁 path」與 og:description 關鍵字（Review #1）。
+    """
+    if _AUTH_PATH_RE.match(_urlparse.urlparse(final_url).path or "/"):
+        return "auth_required"
+    og = extract_og_meta(html)
+    if _LOGIN_TITLE_RE.search(og.get("title", "")):
+        return "auth_required"
+    if _LOGIN_FORM_RE.search(html):
+        return "auth_required"
+    # 情境化：僅抓貼文（requested_url 可解析出 code）才把首頁重導視為 auth
+    req_code = None
+    if requested_url:
+        try:
+            _, req_code = parse_url(requested_url)
+        except ValueError:
+            req_code = None
+    if req_code:
+        if og.get("url") and _is_threads_homepage(og["url"]):
+            return "auth_required"
+        if req_code not in final_url:
+            return "auth_required"
+    return None
 
 
 def filter_by_flags(
@@ -351,6 +413,19 @@ def write_output(
         (out_dir / "screenshot.png").write_bytes(screenshot)
 
     return out_dir
+
+
+@dataclass
+class FetchResult:
+    html: str
+    screenshot: bytes | None
+    final_url: str
+    auth_status: Literal["ok", "auth_required"]  # 收窄型別，拼字錯誤不靜默落 ok
+
+
+def _default_profile_dir() -> pathlib.Path:
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    return pathlib.Path(base) / "threads-pipeline" / "threads-profile"
 
 
 def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:

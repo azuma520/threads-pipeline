@@ -478,6 +478,82 @@ def test_extract_og_fields_content_with_gt_char():
     assert og["description"] == "a > b comparison"
 
 
+def test_extract_og_meta_gets_url_and_title_without_description():
+    html = ('<meta property="og:title" content="Threads • Log in" />'
+            '<meta content="https://www.threads.com/" property="og:url">')
+    og = ftp.extract_og_meta(html)  # 新函式：不要求 description
+    assert og["title"] == "Threads • Log in"
+    assert og["url"] == "https://www.threads.com/"
+
+
+def test_detect_auth_failure_login_title():
+    html = '<meta property="og:title" content="Threads • Log in" />'
+    assert ftp.detect_auth_failure("https://www.threads.com/@u/post/X", html) == "auth_required"
+
+
+def test_detect_auth_failure_checkpoint_url():
+    assert ftp.detect_auth_failure("https://www.threads.com/checkpoint/1", "<html></html>") == "auth_required"
+
+
+def test_detect_auth_failure_login_url():
+    assert ftp.detect_auth_failure("https://www.threads.com/login", "<html></html>") == "auth_required"
+
+
+def test_detect_auth_failure_og_url_homepage_redirect():
+    # 抓貼文卻被重導：og:url 指向首頁（需傳 requested_url 才觸發情境化訊號）
+    html = '<meta property="og:url" content="https://www.threads.com/" />'
+    url = "https://www.threads.com/@u/post/X"
+    assert ftp.detect_auth_failure(url, html, requested_url=url) == "auth_required"
+
+
+def test_detect_auth_failure_final_url_left_post():
+    # 抓貼文但 final_url 已不含 code → 被重導離開
+    html = "<html></html>"
+    assert ftp.detect_auth_failure(
+        "https://www.threads.com/somewhere", html,
+        requested_url="https://www.threads.com/@u/post/ABC123") == "auth_required"
+
+
+def test_detect_auth_failure_login_form():
+    html = '<form><input type="password" name="pass"></form>'
+    assert ftp.detect_auth_failure("https://www.threads.com/@u/post/X", html) == "auth_required"
+
+
+def test_detect_auth_failure_normal_post_returns_none():
+    url = "https://www.threads.com/@lingyu9683/post/DISnS0JJywN"
+    html = ('<meta property="og:title" content="澤哥 (@lingyu9683) on Threads" />'
+            f'<meta property="og:url" content="{url}" />')
+    assert ftp.detect_auth_failure(url, html, requested_url=url) is None
+
+
+def test_detect_auth_failure_logged_in_homepage_returns_none():
+    # 關鍵回歸（Review C1）：auth-check goto 首頁，已登入首頁 og:url=首頁、無表單
+    # requested_url=首頁（無 code）→ 情境化訊號不啟用 → None（不誤判）
+    html = '<meta property="og:url" content="https://www.threads.com/" /><div>feed</div>'
+    assert ftp.detect_auth_failure(
+        "https://www.threads.com/", html, requested_url="https://www.threads.com/") is None
+
+
+def test_detect_auth_failure_ignores_og_description_keyword():
+    url = "https://www.threads.com/@u/post/X"
+    html = ('<meta property="og:title" content="Threads" />'
+            '<meta property="og:description" content="登入以查看更多內容" />'
+            f'<meta property="og:url" content="{url}" />')
+    assert ftp.detect_auth_failure(url, html, requested_url=url) is None
+
+
+def test_fetchresult_fields():
+    r = ftp.FetchResult(html="<h1>x</h1>", screenshot=None,
+                        final_url="https://www.threads.com/@u/post/X", auth_status="ok")
+    assert r.html == "<h1>x</h1>" and r.auth_status == "ok"
+
+
+def test_default_profile_dir_under_localappdata(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    p = ftp._default_profile_dir()
+    assert p == tmp_path / "threads-pipeline" / "threads-profile"
+
+
 def test_render_partial_markdown_has_partial_frontmatter():
     og = {"title": "澤哥 (@lingyu9683) on Threads", "description": "內文摘要"}
     meta = {
