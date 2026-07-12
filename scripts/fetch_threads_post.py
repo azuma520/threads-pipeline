@@ -514,6 +514,7 @@ class _ArgParser(argparse.ArgumentParser):
     """argparse usage error → exit 1（不得沿用預設 SystemExit(2)，會撞內容失敗碼）。"""
 
     def error(self, message):
+        self.print_usage(sys.stderr)
         print(f"ERROR: {message}", file=sys.stderr)
         raise SystemExit(1)
 
@@ -527,7 +528,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         from playwright.sync_api import Error as PlaywrightError
     except ImportError:
-        PlaywrightError = ()  # type: ignore[assignment]
+        # playwright 缺席時的 dummy：永遠不會被 raise，僅讓 except tuple 合法。
+        # 不可用空 tuple——except (..., ()) 會在 catch 時拋 TypeError，
+        # operational 例外反而 crash 而非回 exit 5。
+        class PlaywrightError(Exception):  # type: ignore[no-redef]
+            pass
 
     try:
         return _run(argv)

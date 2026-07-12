@@ -672,6 +672,19 @@ def test_main_operational_failure_exits_5(tmp_path, monkeypatch):
     assert rc == 5
 
 
+def test_main_operational_failure_exits_5_without_playwright(tmp_path, monkeypatch):
+    # playwright 缺席（ImportError fallback 路徑）時 operational 例外仍須回 5，
+    # 不得因 except tuple 含非例外物件而 TypeError crash。
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", None)  # 強制 import 失敗
+
+    def _boom(*a, **k):
+        raise RuntimeError("profile ... in use")
+    monkeypatch.setattr(ftp, "fetch_page", _boom)
+    rc = ftp.main(["https://www.threads.net/@u/post/X", "--no-screenshot",
+                   "--out", str(tmp_path), "--profile", str(tmp_path / "p")])
+    assert rc == 5
+
+
 def test_main_missing_url_general_mode_exits_1(tmp_path):
     rc = ftp.main(["--no-screenshot", "--out", str(tmp_path)])
     assert rc == 1
