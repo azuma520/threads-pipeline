@@ -225,6 +225,7 @@ def extract_og_meta(html: str) -> dict:
 _LOGIN_TITLE_RE = re.compile(r"log ?in|登入", re.IGNORECASE)
 _AUTH_PATH_RE = re.compile(r"^/(login|checkpoint|challenge)(/|$)", re.IGNORECASE)
 _LOGIN_FORM_RE = re.compile(r"""type=['\"]password['\"]|name=['\"]password['\"]""", re.IGNORECASE)
+_VIEWER_ID_RE = re.compile(r'"(?:NON_FACEBOOK_USER_ID|IG_USER_EIMU)":"(\d+)"')
 _THREADS_HOSTS = {"www.threads.com", "threads.com", "www.threads.net", "threads.net"}
 
 
@@ -244,10 +245,19 @@ def detect_auth_failure(final_url: str, html: str, *, requested_url: str | None 
     auth-check 模式 goto 首頁（requested 非貼文）**不**觸發這兩條，故已登入首頁
     （og:url=首頁、無表單）正確回 None，不誤判（Review C1）。
 
+    正向身分訊號（2026-07-12 dogfood 實證，優先於 og:title／表單訊號，次於
+    auth path 訊號）：Meta 對 threads.com 根路徑固定送 og:title「Threads •
+    登入」（靜態 crawler tag，與登入狀態無關），已登入首頁同樣會出現，故
+    og:title 不能單獨當登出證據。頁面 HTML 含非零 NON_FACEBOOK_USER_ID／
+    IG_USER_EIMU 是乾淨的登入證據，一旦命中直接判定 session 有效。
+
     刻意不採「final URL 落在首頁 path」與 og:description 關鍵字（Review #1）。
     """
     if _AUTH_PATH_RE.match(_urlparse.urlparse(final_url).path or "/"):
         return "auth_required"
+    m = _VIEWER_ID_RE.search(html)
+    if m and m.group(1) != "0":
+        return None
     og = extract_og_meta(html)
     if _LOGIN_TITLE_RE.search(og.get("title", "")):
         return "auth_required"

@@ -538,6 +538,35 @@ def test_detect_auth_failure_ignores_og_description_keyword():
     assert ftp.detect_auth_failure(url, html, requested_url=url) is None
 
 
+def test_detect_auth_failure_logged_in_homepage_static_login_ogtitle_returns_none():
+    # dogfood 實證回歸：已登入首頁 og:title 仍是「Threads • 登入」（靜態 crawler tag）
+    # 但帶非零 NON_FACEBOOK_USER_ID → 不得誤判
+    html = ('<meta property="og:title" content="Threads • 登入" />'
+            '<script>{"NON_FACEBOOK_USER_ID":"17841464204254967"}</script>')
+    assert ftp.detect_auth_failure(
+        "https://www.threads.com/", html, requested_url="https://www.threads.com/") is None
+
+
+def test_detect_auth_failure_anonymous_homepage_zero_viewer_id_exits_auth():
+    # 匿名首頁：NON_FACEBOOK_USER_ID 為 "0" → 正向訊號不啟用 → og:title 登入照常觸發
+    html = ('<meta property="og:title" content="Threads • 登入" />'
+            '<script>{"NON_FACEBOOK_USER_ID":"0"}</script>')
+    assert ftp.detect_auth_failure("https://www.threads.com/", html) == "auth_required"
+
+
+def test_detect_auth_failure_checkpoint_overrides_viewer_id():
+    # checkpoint/challenge 優先於正向訊號：已登入但被挑戰仍要 auth_required
+    html = '<script>{"NON_FACEBOOK_USER_ID":"17841464204254967"}</script>'
+    assert ftp.detect_auth_failure("https://www.threads.com/checkpoint/1", html) == "auth_required"
+
+
+def test_detect_auth_failure_ig_user_eimu_variant_returns_none():
+    html = ('<meta property="og:title" content="Threads • Log in" />'
+            '<script>{"IG_USER_EIMU":"17841464204254967"}</script>')
+    assert ftp.detect_auth_failure(
+        "https://www.threads.com/@u/post/X", html) is None
+
+
 def test_fetchresult_fields():
     r = ftp.FetchResult(html="<h1>x</h1>", screenshot=None,
                         final_url="https://www.threads.com/@u/post/X", auth_status="ok")
