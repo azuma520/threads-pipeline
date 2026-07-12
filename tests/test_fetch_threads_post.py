@@ -563,22 +563,6 @@ def test_profile_lock_release_allows_reacquire(tmp_path):
     ftp.ProfileLock(tmp_path).acquire()  # 不 raise
 
 
-def test_render_partial_markdown_has_partial_frontmatter():
-    og = {"title": "澤哥 (@lingyu9683) on Threads", "description": "內文摘要"}
-    meta = {
-        "author": "lingyu9683",
-        "code": "DISnS0JJywN",
-        "url": "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
-        "fetched_at": "2026-07-05T12:00:00+00:00",
-    }
-    md = ftp.render_partial_markdown(og, meta)
-    head, body = md.split("---\n", 2)[1], md.split("---\n", 2)[2]
-    assert "partial: true" in head
-    assert "author: lingyu9683" in head
-    assert "內文摘要" in body
-    assert "og fallback" in body
-
-
 def test_write_output_none_relay_skips_relay_json(tmp_path):
     meta = {
         "author": "u1",
@@ -599,52 +583,80 @@ def _fake_fetch(url, screenshot=True, *, profile_dir=None, headless=False):
     return ftp.FetchResult(html=NO_RELAY_HTML, screenshot=None, final_url=url, auth_status="ok")
 
 
-def test_main_og_fallback_exits_3(tmp_path, monkeypatch):
+def test_main_og_no_longer_produces_partial(tmp_path, monkeypatch):
+    # Task 4: og fallback 不再產 partial（品質太差不可信）。relay 失敗 +
+    # og 有內文但非登入牆 → exit 2，且完全不建立輸出目錄。
     monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
     monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: OG_FIXTURE)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
-        "--no-screenshot", "--out", str(tmp_path),
+        "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
     ])
-    assert rc == 3
-    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
-    assert len(out_dirs) == 1
-    meta = json.loads((out_dirs[0] / "meta.json").read_text(encoding="utf-8"))
-    assert meta["fetch_mode"] == "og_fallback"
-    assert "partial: true" in (out_dirs[0] / "post.md").read_text(encoding="utf-8")
-    assert not (out_dirs[0] / "relay.json").exists()
+    assert rc == 2
+    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name not in ("_debug", "p")]
+    assert out_dirs == []  # 無 partial 目錄
+
+
+def test_main_og_fallback_login_wall_exits_4(tmp_path, monkeypatch):
+    # og fallback 僅 og:url 首頁（無 title/form）→ 需情境化訊號（requested_url）
+    # 才判為登入牆 → exit 4
+    monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
+    monkeypatch.setattr(
+        ftp, "fetch_og_fallback",
+        lambda url: '<meta property="og:url" content="https://www.threads.com/" />',
+    )
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
+    ])
+    assert rc == 4
+    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name not in ("_debug", "p")]
+    assert out_dirs == []
 
 
 def test_main_og_also_dead_exits_2_with_debug_dump(tmp_path, monkeypatch):
+    # --debug-dump 有給時，relay+og 皆失敗要落 debug html
     monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
     monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: None)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
-        "--no-screenshot", "--out", str(tmp_path),
+        "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
+        "--debug-dump",
     ])
     assert rc == 2
     assert list((tmp_path / "_debug").glob("*_nomatch.html"))
 
 
-# Codex ①：og 有內文但 title 不含 URL 作者（logged-out feed / 錯誤頁偽裝）→ exit 2，不產 partial
+def test_main_debug_dump_off_by_default_no_debug_file(tmp_path, monkeypatch):
+    # Task 4: debug dump 改 gated——不給 --debug-dump 時，即使內容失敗也不得寫檔
+    monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
+    monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: None)
+    rc = ftp.main([
+        "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
+        "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
+    ])
+    assert rc == 2
+    assert not (tmp_path / "_debug").exists()
+
+
+# og 有內文但不是登入牆（也不含明確作者/貼文訊號）→ 落一般失敗 exit 2，不產 partial
 WRONG_AUTHOR_OG = (
     '<meta property="og:title" content="Threads" />'
     '<meta property="og:description" content="&#x767b;入以查看更多內容" />'
 )
 
 
-def test_main_og_wrong_author_exits_2_no_partial(tmp_path, monkeypatch):
+def test_main_og_non_login_wall_content_exits_2_no_partial(tmp_path, monkeypatch):
     monkeypatch.setattr(ftp, "fetch_page", _fake_fetch)
     monkeypatch.setattr(ftp, "fetch_og_fallback", lambda url: WRONG_AUTHOR_OG)
     rc = ftp.main([
         "https://www.threads.net/@lingyu9683/post/DISnS0JJywN",
-        "--no-screenshot", "--out", str(tmp_path),
+        "--no-screenshot", "--out", str(tmp_path), "--profile", str(tmp_path / "p"),
     ])
     assert rc == 2
-    # author guard 擋下 → 不得產出 partial 目錄，走 debug dump
-    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
+    # og 內容判不出登入牆 → 不得產出 partial 目錄（partial 已徹底移除）
+    out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name not in ("_debug", "p")]
     assert out_dirs == []
-    assert list((tmp_path / "_debug").glob("*_nomatch.html"))
 
 
 # --- Task 3: CLI 契約（url 可選 + exit 4/5） ---
@@ -700,3 +712,36 @@ def test_main_login_and_authcheck_conflict_exits_1(tmp_path):
     # 兩模式旗標互斥，同時給 → exit 1（非靜默選 login）
     rc = ftp.main(["--login", "--auth-check-only", "--profile", str(tmp_path / "p")])
     assert rc == 1
+
+
+# --- Task 4: --login / --auth-check-only 真行為 ---
+
+
+def test_main_login_does_not_fetch(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        ftp, "fetch_page",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no fetch")),
+    )
+    monkeypatch.setattr(ftp, "run_login", lambda profile_dir: 0)
+    assert ftp.main(["--login", "--profile", str(tmp_path / "p")]) == 0
+
+
+def test_main_auth_check_logged_in_exits_0(tmp_path, monkeypatch):
+    # 已登入首頁：無登入表單 → 0
+    def _fake(url, screenshot=True, *, profile_dir=None, headless=False):
+        return ftp.FetchResult(
+            html="<div>feed</div>", final_url="https://www.threads.com/",
+            screenshot=None, auth_status="ok",
+        )
+    monkeypatch.setattr(ftp, "fetch_page", _fake)
+    assert ftp.main(["--auth-check-only", "--profile", str(tmp_path / "p")]) == 0
+
+
+def test_main_auth_check_logged_out_exits_4(tmp_path, monkeypatch):
+    def _fake(url, screenshot=True, *, profile_dir=None, headless=False):
+        return ftp.FetchResult(
+            html='<input type="password">', final_url="https://www.threads.com/",
+            screenshot=None, auth_status="auth_required",
+        )
+    monkeypatch.setattr(ftp, "fetch_page", _fake)
+    assert ftp.main(["--auth-check-only", "--profile", str(tmp_path / "p")]) == 4
