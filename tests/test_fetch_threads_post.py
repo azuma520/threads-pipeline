@@ -644,6 +644,7 @@ def test_main_og_wrong_author_exits_2_no_partial(tmp_path, monkeypatch):
     # author guard 擋下 → 不得產出 partial 目錄，走 debug dump
     out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
     assert out_dirs == []
+    assert list((tmp_path / "_debug").glob("*_nomatch.html"))
 
 
 # --- Task 3: CLI 契約（url 可選 + exit 4/5） ---
