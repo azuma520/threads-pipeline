@@ -1,8 +1,9 @@
-# threads-post-fetching Specification
+# threads-post-fetching Delta Spec
 
-## Purpose
-TBD - created by archiving change fix-threads-fetcher. Update Purpose after archive.
-## Requirements
+> Review 修訂（Codex gpt-5.6-sol，2026-07-12）：requirement identity 對齊 openspec 慣例——變動用原名 MODIFIED、換掉的 REMOVED、新的 ADDED，不改名合併。og partial 徹底移除（使用者裁決）；operational failure 新增 exit 5。
+
+## ADDED Requirements
+
 ### Requirement: Authenticated persistent-profile fetch
 `fetch_threads_post.py` 的主管道 SHALL 以帶登入 session 的專用 persistent browser profile 開啟貼文頁。fetcher SHALL 使用 `launch_persistent_context` 綁定 repo 外的專用 `user_data_dir`，SHALL 保持 Chromium 預設指紋一致（登入與抓取共用同一 profile），MUST NOT 套用行動版 UA 偽裝或其他 fingerprint spoofing。fetcher SHALL 對同一 profile 強制單實例（併發啟動 SHALL 以明確錯誤拒絕並以 operational 退出碼結束）。
 
@@ -44,15 +45,14 @@ fetcher SHALL 提供 `--login` 旗標開啟 headed 瀏覽器供使用者本人�
 - **WHEN** 以 `--login`（不帶 URL）呼叫 fetcher
 - **THEN** fetcher SHALL 開啟 headed 瀏覽器讓使用者登入，登入完成後保存 session 至 profile，MUST NOT 嘗試抓取或輸出，且 MUST NOT 因缺 URL 而報錯
 
-### Requirement: Main-author filtering of A-segment posts
-主文（A 段）SHALL 只包含 URL 中主文作者（`main_author`）的貼文節點；來自「相關串文」等推薦區塊的他人貼文 MUST NOT 出現在 A 段輸出。
-
-#### Scenario: 行動版頁面混入相關串文
-- **WHEN** 抓取的頁面 Relay 資料含其他作者的頂層非回覆貼文
-- **THEN** 這些節點 SHALL 被排除於 A 段之外，post.md 主文段只含 `main_author` 的內容
+## MODIFIED Requirements
 
 ### Requirement: Exit code contract
 fetcher SHALL 以互斥退出碼表達執行結果，`0` 表示**所選執行模式成功**（一般抓取＝Relay 完整成功；`--auth-check-only`＝session 有效；`--login`＝登入初始化完成）；`4` = 登入失效／checkpoint（需重新登入）；`2` = 內容全失敗（Relay 抽不到且非登入失效，含 drift dump）；`1` = 使用參數錯誤（URL 解析失敗、一般模式缺 URL、或 argparse usage error）；`5` = operational 失敗（profile 被占用、瀏覽器啟動失敗等受控環境錯誤）。退出碼 `2` 既有語意（schema drift 內容失敗）MUST NOT 改變；`4` MUST NOT 與 `2` 混用；argparse usage error MUST 映射為 `1`（MUST NOT 沿用 argparse 預設的 `SystemExit(2)`）；operational 失敗 MUST NOT 落入 `1` 或 `2`，SHALL 由 `main()` 最外層統一捕捉**界定的 operational 例外**（profile lock 占用、I/O 錯誤、瀏覽器引擎錯誤）轉為受控的 `5`（涵蓋 login／fetch／輸出／debug dump 全部 I/O），MUST NOT 以未捕捉 traceback 結束。程式缺陷例外（如 `TypeError`／`KeyError`／`AssertionError`）MUST NOT 被偽裝成 `5`（避免測試假綠、真 bug 被藏）。
+
+**Reason**: 匿名 og partial 路徑移除後 exit 3 停用；登入失效（4）與 operational 失敗（5）需與內容失敗（2）、參數錯誤（1）分離，否則呼叫端無法分流。`0` 因引入多模式而語意擴為「模式成功」，呼叫端須先知道自己下的模式再解讀 0。
+
+**Migration**: 呼叫端移除對 exit 3 的處理；新增對 4（暫停路線/提示重登）與 5（可重試 operational）的分流；解讀 0 時綁定所下模式。
 
 #### Scenario: 退出碼互斥可分流
 - **WHEN** 同一次執行以特定模式結束
@@ -61,3 +61,15 @@ fetcher SHALL 以互斥退出碼表達執行結果，`0` 表示**所選執行模
 #### Scenario: argparse usage error 不撞內容失敗碼
 - **WHEN** 傳入未知旗標或缺少選項值等 argparse usage error
 - **THEN** fetcher SHALL 以退出碼 `1` 結束，MUST NOT 以 argparse 預設 `2` 結束（避免與內容失敗混淆）
+
+## REMOVED Requirements
+
+### Requirement: Mobile browser fingerprint for anonymous fetch
+**Reason**: Threads 伺服器端 session 檢查使匿名抓取失效；行動 UA 偽裝在登入態下成為跨引擎不一致的風控訊號。由 "Authenticated persistent-profile fetch" 取代。
+
+**Migration**: `mobile_context_kwargs()` 改為 `authenticated_context_kwargs()`（棄 `MOBILE_UA`／`is_mobile`）；既有匿名測試（如 `test_mobile_context_kwargs_is_anonymous_mobile`）改寫為驗證登入 context 不帶行動偽裝。
+
+### Requirement: OG metadata fallback on Relay failure
+**Reason**: 登入態改版後，Relay 失敗時的匿名 og partial 已無意義（有登入 session 時主管道即應成功），且登入後頁面 og 可能含個人化資料；partial 成功語意會掩蓋真正失敗。匿名 og 若顯示登入牆，改由 "Login-session failure detection" 判為 exit 4；否則走既有 exit 2 內容失敗。（2026-07-12 dogfood 追加：匿名 og 對貼文頁一律回登入牆，登入牆診斷零資訊量且將死貼文誤報為 auth 失效，og fallback 含診斷用途全數移除；relay 缺席時 session 有效性已由主抓取的 auth 偵測保證，逕行 exit 2）
+
+**Migration**: 移除 `render_partial_markdown` 的 exit-3 呼叫路徑；`fetch_og_fallback` 若保留僅作登入牆診斷，MUST NOT 產出 partial 輸出。既有 `test_main_og_fallback_exits_3` 改為驗證「不產 partial 輸出」（exit 2 或 4）。（2026-07-12 追加：移除 `fetch_og_fallback` 與其呼叫點；relay 缺席 → exit 2）
