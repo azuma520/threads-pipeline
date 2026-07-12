@@ -9,8 +9,11 @@ extracts og:title/og:description into a partial output (post.md frontmatter
 `partial: true`, meta.json `fetch_mode: "og_fallback"`, no relay.json).
 
 Exit codes: 0 = full success · 3 = partial (og fallback) · 2 = total failure
-(HTML dumped to drafts/library/_debug/ for schema-drift inspection) · 1 = bad URL ·
-4 = auth required (login session invalid/missing).
+(HTML dumped to drafts/library/_debug/ for schema-drift inspection) ·
+1 = bad args (bad URL, missing URL, unknown/conflicting flags — argparse usage
+errors included) · 4 = auth required (login session invalid/missing) ·
+5 = operational failure (profile lock in use, I/O error, browser engine error —
+NOT a stand-in for programming bugs like TypeError/KeyError/AssertionError).
 Callers (vault-side line-import / source-capture) can branch on exit code alone.
 NOTE: vault-side runners must be taught exit 3 separately (migration note in
 openspec/changes/fix-threads-fetcher/design.md §Migration Plan).
@@ -507,11 +510,44 @@ def fetch_og_fallback(url: str, timeout: float = 20.0) -> str | None:
         return None
 
 
+class _ArgParser(argparse.ArgumentParser):
+    """argparse usage error → exit 1（不得沿用預設 SystemExit(2)，會撞內容失敗碼）。"""
+
+    def error(self, message):
+        print(f"ERROR: {message}", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
+    """Wrapper：把「界定的 operational 例外」統一轉 exit 5，argparse usage error 轉 exit 1。
+
+    只捕捉 ProfileLock 占用(RuntimeError)、I/O(OSError)、瀏覽器引擎錯誤(PlaywrightError)。
+    TypeError/KeyError/AssertionError 等程式缺陷不得偽裝成 exit 5（否則測試假綠、真 bug 被藏）。
+    """
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+    except ImportError:
+        PlaywrightError = ()  # type: ignore[assignment]
+
+    try:
+        return _run(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
+    except (RuntimeError, OSError, PlaywrightError) as exc:
+        print(f"OPERATIONAL: {exc}", file=sys.stderr)
+        return 5
+
+
+def _run(argv: list[str] | None = None) -> int:
+    ap = _ArgParser(
         description="Fetch a Threads post + classified threads/replies into drafts/library/"
     )
-    ap.add_argument("url", help="Threads post URL (https://www.threads.com/@user/post/CODE)")
+    ap.add_argument(
+        "url",
+        nargs="?",
+        help="Threads post URL (https://www.threads.com/@user/post/CODE); "
+        "omit for --login/--auth-check-only",
+    )
     ap.add_argument(
         "--include-replies",
         action="store_true",
@@ -529,7 +565,37 @@ def main(argv: list[str] | None = None) -> int:
         default=pathlib.Path("drafts/library"),
         help="Output root (default: drafts/library)",
     )
+    ap.add_argument(
+        "--profile",
+        type=pathlib.Path,
+        default=_default_profile_dir(),
+        help="Persistent browser profile dir (login session)",
+    )
+    ap.add_argument("--headless", action="store_true", help="Run headless (default headed)")
+    ap.add_argument(
+        "--debug-dump",
+        action="store_true",
+        help="On content failure, dump HTML to _debug",
+    )
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--login", action="store_true", help="Headed login to init profile; no fetch"
+    )
+    mode.add_argument(
+        "--auth-check-only",
+        action="store_true",
+        help="Verify session (0 ok / 4 need login)",
+    )
     args = ap.parse_args(argv)
+
+    if not args.login and not args.auth_check_only and not args.url:
+        print("ERROR: url required (or use --login / --auth-check-only)", file=sys.stderr)
+        return 1
+
+    if args.login or args.auth_check_only:
+        # TODO(Task 4): 真行為（run_login / auth-check）取代此 stub。
+        print("NOT IMPLEMENTED YET (Task 4)", file=sys.stderr)
+        return 1
 
     try:
         username, code = parse_url(args.url)
@@ -538,7 +604,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"Fetching {args.url} ...", file=sys.stderr)
-    result = fetch_page(args.url, screenshot=not args.no_screenshot)
+    result = fetch_page(
+        args.url,
+        screenshot=not args.no_screenshot,
+        profile_dir=args.profile,
+        headless=args.headless,
+    )
     if result.auth_status == "auth_required":
         print("AUTH: login session invalid — re-run with --login", file=sys.stderr)
         return 4

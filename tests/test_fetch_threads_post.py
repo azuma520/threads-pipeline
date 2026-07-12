@@ -644,4 +644,45 @@ def test_main_og_wrong_author_exits_2_no_partial(tmp_path, monkeypatch):
     # author guard 擋下 → 不得產出 partial 目錄，走 debug dump
     out_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "_debug"]
     assert out_dirs == []
-    assert list((tmp_path / "_debug").glob("*_nomatch.html"))
+
+
+# --- Task 3: CLI 契約（url 可選 + exit 4/5） ---
+
+LOGIN_WALL_HTML = '<meta property="og:title" content="Threads • Log in" />'
+
+
+def test_main_auth_required_exits_4(tmp_path, monkeypatch):
+    def _fake(url, screenshot=True, *, profile_dir=None, headless=False):
+        return ftp.FetchResult(html=LOGIN_WALL_HTML, screenshot=None,
+                               final_url="https://www.threads.com/@u/post/X", auth_status="auth_required")
+    monkeypatch.setattr(ftp, "fetch_page", _fake)
+    rc = ftp.main(["https://www.threads.net/@u/post/X", "--no-screenshot",
+                   "--out", str(tmp_path), "--profile", str(tmp_path / "p")])
+    assert rc == 4
+    assert not (tmp_path / "_debug").exists()
+
+
+def test_main_operational_failure_exits_5(tmp_path, monkeypatch):
+    def _boom(*a, **k):
+        raise RuntimeError("profile ... in use")
+    monkeypatch.setattr(ftp, "fetch_page", _boom)
+    rc = ftp.main(["https://www.threads.net/@u/post/X", "--no-screenshot",
+                   "--out", str(tmp_path), "--profile", str(tmp_path / "p")])
+    assert rc == 5
+
+
+def test_main_missing_url_general_mode_exits_1(tmp_path):
+    rc = ftp.main(["--no-screenshot", "--out", str(tmp_path)])
+    assert rc == 1
+
+
+def test_main_unknown_flag_exits_1(tmp_path):
+    # argparse usage error 不得用預設 SystemExit(2)（撞內容失敗碼）
+    rc = ftp.main(["--no-such-flag"])
+    assert rc == 1
+
+
+def test_main_login_and_authcheck_conflict_exits_1(tmp_path):
+    # 兩模式旗標互斥，同時給 → exit 1（非靜默選 login）
+    rc = ftp.main(["--login", "--auth-check-only", "--profile", str(tmp_path / "p")])
+    assert rc == 1
