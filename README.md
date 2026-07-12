@@ -53,6 +53,24 @@ PYTHONUTF8=1 python -m threads_pipeline.main
 threads post get <URL>
 ```
 
+### 單篇貼文抓取（prototype）
+
+`scripts/fetch_threads_post.py` 用登入態 persistent Chromium profile 抓取單篇
+Threads 貼文（含分類回覆），輸出到 `drafts/library/`：
+
+```bash
+pip install -e ".[dev,prototype]"
+playwright install chromium
+
+# 首次使用先建立登入 profile（headed，可完成 2FA）
+python scripts/fetch_threads_post.py --login
+
+# 抓取單篇貼文
+python scripts/fetch_threads_post.py "https://www.threads.com/@user/post/CODE"
+```
+
+Exit code：`0` 成功 · `1` 參數錯 · `2` 內容失敗 · `4` 需重新登入 · `5` operational 失敗（詳見 `CLAUDE.md`）。
+
 ## 架構
 
 ```

@@ -117,10 +117,12 @@ threads_pipeline/
 │   ├── conftest.py
 │   ├── test_analyzer.py
 │   ├── test_threads_client.py
-│   └── test_report.py
+│   ├── test_report.py
+│   └── test_fetch_threads_post.py # fetch_threads_post.py 單測（76 個）
 ├── scripts/
 │   ├── api_explorer.py           # API 功能邊界探索腳本
-│   └── demo_publish_reply.py     # 發文/回覆 Demo（App Review 用）
+│   ├── demo_publish_reply.py     # 發文/回覆 Demo（App Review 用）
+│   └── fetch_threads_post.py     # 登入態單篇貼文抓取（見下方「Fetcher 登入態」）
 ├── output/threads_reports/
 │   ├── trend/                    # 趨勢日報（trend_YYYY-MM-DD.md）
 │   └── dashboard/                # 戰情日報（dashboard_YYYY-MM-DD.md）
@@ -155,6 +157,43 @@ Currently using Standard Access for `threads_keyword_search` — search results 
 - `like_count` not available in search results (use `{post_id}/insights` instead)
 - `author_username` parameter ignored under Standard Access
 - Chinese keyword search returns 0 results under Standard Access
+
+## Fetcher 登入態（`scripts/fetch_threads_post.py`）
+
+獨立於上面的 pipeline 之外，`fetch_threads_post.py` 用登入態 persistent Chromium
+profile 抓取**單篇** Threads 貼文（+ 分類回覆），供 vault 側 line-import /
+source-capture 呼叫。2026-07 起 Threads 對桌面匿名流量一律導向 logged-out
+feed，故主抓取路徑已改用登入態瀏覽器 profile，不再靠行動 UA 偽裝。
+
+```bash
+# 建立/更新登入 profile：headed 開瀏覽器，可在裡面完成登入（含 2FA），
+# 完成後回終端按 Enter 才會關閉（不會抓貼文）
+python scripts/fetch_threads_post.py --login
+
+# 驗證目前 profile 的登入 session 是否有效（不抓貼文，只 goto 首頁判斷）
+python scripts/fetch_threads_post.py --auth-check-only
+
+# 正常抓取：預設 headed；--headless 可選跑無頭
+python scripts/fetch_threads_post.py "https://www.threads.com/@user/post/CODE"
+python scripts/fetch_threads_post.py "https://www.threads.com/@user/post/CODE" --headless
+
+# 自訂 profile 路徑（預設 %LOCALAPPDATA%\threads-pipeline\threads-profile）
+python scripts/fetch_threads_post.py "..." --profile D:\custom\profile
+
+# 內容抓取失敗（拿不到 Relay JSON）時把 HTML dump 到 drafts/library/_debug/
+# 供排查 schema drift；預設不 dump
+python scripts/fetch_threads_post.py "..." --debug-dump
+```
+
+Exit code（呼叫端只需依 code 分支，不需解析 stderr）：
+
+| Code | 意義 |
+|------|------|
+| 0 | 該模式成功（一般抓取完成 / `--auth-check-only` 判定已登入 / `--login` 流程結束） |
+| 1 | 參數錯（缺 URL、URL 格式錯、`--login`/`--auth-check-only` 旗標衝突、argparse usage error） |
+| 2 | 內容失敗（抓不到 Relay JSON——死貼文/重導/schema drift；重導離開貼文時 stderr 附 GONE 提示。og fallback 診斷已移除 2026-07-12：匿名請求對貼文頁一律回登入牆，零資訊量且會誤報死貼文為 auth 失效） |
+| 4 | 需登入（session 失效或缺失，由主抓取 `FetchResult.auth_status` 判定，需重跑 `--login`） |
+| 5 | operational 失敗（profile lock 被佔用、I/O 錯誤、瀏覽器引擎錯誤——非程式缺陷，TypeError/KeyError 等仍會照常炸出） |
 
 ## Available Skills
 

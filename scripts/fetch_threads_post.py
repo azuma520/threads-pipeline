@@ -1,17 +1,23 @@
 """Fetch a Threads post + classified threads/replies via Playwright + Relay JSON.
 
-Uses a mobile browser fingerprint (MOBILE_UA + is_mobile) — since 2026-07
-Threads redirects anonymous *desktop* traffic to the logged-out feed.
+Main path uses an authenticated persistent-profile Chromium context (no mobile
+UA spoof) — since 2026-07 Threads redirects anonymous *desktop* traffic to the
+logged-out feed, so fetches rely on a logged-in browser profile instead.
 
-Fallback chain: when Relay data is unavailable, a single anonymous HTTP GET
-extracts og:title/og:description into a partial output (post.md frontmatter
-`partial: true`, meta.json `fetch_mode: "og_fallback"`, no relay.json).
+Relay 缺席一律視為內容失敗（死貼文/重導/schema drift），直接 exit 2——不再有匿名
+og 降級診斷（2026-07-12 dogfood 移除：匿名請求對貼文頁一律回登入牆，零資訊量，
+且會把死貼文誤報成 auth 失效；auth 失效已由主抓取的 FetchResult.auth_status
+上游攔截）。
 
-Exit codes: 0 = full success · 3 = partial (og fallback) · 2 = total failure
-(HTML dumped to drafts/library/_debug/ for schema-drift inspection) · 1 = bad URL.
+Exit codes: 0 = full success · 2 = total failure (relay missing; HTML
+optionally dumped to drafts/library/_debug/ via --debug-dump for schema-drift
+inspection; redirect-away-from-post cases also print a GONE hint on stderr) ·
+1 = bad args (bad URL, missing URL, unknown/conflicting flags — argparse usage
+errors included) · 4 = auth required (login session invalid/missing, detected
+from the main fetch's FetchResult.auth_status) ·
+5 = operational failure (profile lock in use, I/O error, browser engine error —
+NOT a stand-in for programming bugs like TypeError/KeyError/AssertionError).
 Callers (vault-side line-import / source-capture) can branch on exit code alone.
-NOTE: vault-side runners must be taught exit 3 separately (migration note in
-openspec/changes/fix-threads-fetcher/design.md §Migration Plan).
 
 Prototype usage:
 
@@ -27,10 +33,14 @@ import argparse
 import datetime
 import html as _html_lib
 import json
+import os
 import pathlib
 import re
 import sys
+import urllib.parse as _urlparse
+from dataclasses import dataclass
 from html.parser import HTMLParser
+from typing import Literal
 
 
 _URL_RE = re.compile(
@@ -109,25 +119,12 @@ def walk_posts(data) -> list[dict]:
     return found
 
 
-# 2026-07-05 起 Threads 對桌面匿名流量一律導向 logged-out feed；
-# 行動版 UA + is_mobile 實測仍可取得完整 Relay 資料（見 openspec change fix-threads-fetcher）。
-MOBILE_UA = (
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
-    "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-)
+def authenticated_context_kwargs() -> dict:
+    """Context kwargs for authenticated persistent-profile fetch (design D2).
 
-
-def mobile_context_kwargs() -> dict:
-    """Playwright new_context kwargs for anonymous mobile fetch (design D1).
-
-    抽成純函式使指紋契約可單測，無需 mock Chromium。刻意不含
-    storage_state / cookies——匿名鐵律。
+    棄行動 UA 偽裝（登入態下跨引擎不一致＝風控訊號）；僅固定 locale/timezone。
     """
-    return {
-        "user_agent": MOBILE_UA,
-        "viewport": {"width": 390, "height": 844},
-        "is_mobile": True,
-    }
+    return {"locale": "zh-TW", "timezone_id": "Asia/Taipei"}
 
 
 _RELAY_QUERY_MARKER = "BarcelonaPostPageDirectQuery"
@@ -181,7 +178,7 @@ class _OGMetaParser(HTMLParser):
             return
         d = dict(attrs)
         prop = d.get("property", "")
-        if prop in ("og:title", "og:description") and d.get("content"):
+        if prop in ("og:title", "og:description", "og:url") and d.get("content"):
             self.og[prop[len("og:"):]] = d["content"]
 
 
@@ -204,6 +201,74 @@ def extract_og_fields(html: str) -> dict | None:
         "title": _html_lib.unescape(parser.og.get("title", "")),
         "description": _html_lib.unescape(desc),
     }
+
+
+def extract_og_meta(html: str) -> dict:
+    """Return og title/description/url (unescaped); missing keys omitted.
+
+    與 extract_og_fields 不同：不把「缺 description」當 None——detect_auth_failure
+    只需 title/url，登入牆頁面常無 description。沿用 _OGMetaParser 故容忍
+    屬性順序與單雙引號（既有 test_extract_og_fields_* 契約）。
+    """
+    parser = _OGMetaParser()
+    parser.feed(html)
+    return {k: _html_lib.unescape(v) for k, v in parser.og.items()}
+
+
+_LOGIN_TITLE_RE = re.compile(r"log ?in|登入", re.IGNORECASE)
+_AUTH_PATH_RE = re.compile(r"^/(login|checkpoint|challenge)(/|$)", re.IGNORECASE)
+_LOGIN_FORM_RE = re.compile(r"""type=['\"]password['\"]|name=['\"]password['\"]""", re.IGNORECASE)
+_VIEWER_ID_RE = re.compile(r'"(?:NON_FACEBOOK_USER_ID|IG_USER_EIMU)":"(\d+)"')
+_THREADS_HOSTS = {"www.threads.com", "threads.com", "www.threads.net", "threads.net"}
+
+
+def _is_threads_homepage(url: str) -> bool:
+    p = _urlparse.urlparse(url)
+    return p.netloc in _THREADS_HOSTS and (p.path or "/") == "/"
+
+
+def detect_auth_failure(final_url: str, html: str, *, requested_url: str | None = None) -> str | None:
+    """Return "auth_required" if the page is a login wall / checkpoint, else None.
+
+    通用訊號（兩情境皆安全）：final URL 為 /login|/checkpoint|/challenge、
+    og:title 登入字樣、頁面含登入表單。
+
+    情境化訊號（僅當 requested_url 是「貼文」時啟用，Review C1/M1）：og:url 指向
+    首頁、或 final_url 已不含 requested 貼文 code——代表抓貼文被重導離開。
+    auth-check 模式 goto 首頁（requested 非貼文）**不**觸發這兩條，故已登入首頁
+    （og:url=首頁、無表單）正確回 None，不誤判（Review C1）。
+
+    正向身分訊號（2026-07-12 dogfood 實證，優先於 og:title／表單訊號，次於
+    auth path 訊號）：Meta 對 threads.com 根路徑固定送 og:title「Threads •
+    登入」（靜態 crawler tag，與登入狀態無關），已登入首頁同樣會出現，故
+    og:title 不能單獨當登出證據。頁面 HTML 含非零 NON_FACEBOOK_USER_ID／
+    IG_USER_EIMU 是乾淨的登入證據，一旦命中直接判定 session 有效。
+
+    刻意不採「final URL 落在首頁 path」與 og:description 關鍵字（Review #1）。
+    """
+    if _AUTH_PATH_RE.match(_urlparse.urlparse(final_url).path or "/"):
+        return "auth_required"
+    m = _VIEWER_ID_RE.search(html)
+    if m and m.group(1) != "0":
+        return None
+    og = extract_og_meta(html)
+    if _LOGIN_TITLE_RE.search(og.get("title", "")):
+        return "auth_required"
+    if _LOGIN_FORM_RE.search(html):
+        return "auth_required"
+    # 情境化：僅抓貼文（requested_url 可解析出 code）才把首頁重導視為 auth
+    req_code = None
+    if requested_url:
+        try:
+            _, req_code = parse_url(requested_url)
+        except ValueError:
+            req_code = None
+    if req_code:
+        if og.get("url") and _is_threads_homepage(og["url"]):
+            return "auth_required"
+        if req_code not in final_url:
+            return "auth_required"
+    return None
 
 
 def filter_by_flags(
@@ -293,25 +358,6 @@ def render_markdown(
     return "\n".join(lines)
 
 
-def render_partial_markdown(og: dict, meta: dict) -> str:
-    """Render a partial post.md from og fallback fields.
-
-    Frontmatter 與完整版共用 author/code/url/fetched_at 四鍵，
-    另加 `partial: true`（design D3）供下游辨識降級品質。
-    """
-    lines = ["---"]
-    for key in ("author", "code", "url", "fetched_at"):
-        lines.append(f"{key}: {meta[key]}")
-    lines.append("partial: true")
-    lines.append("---")
-    lines.append("")
-    lines.append(f"## [A] @{meta['author']} · {meta['code']} (og fallback)")
-    lines.append("")
-    lines.append(og["description"])
-    lines.append("")
-    return "\n".join(lines)
-
-
 def write_output(
     out_root: pathlib.Path,
     meta: dict,
@@ -328,7 +374,7 @@ def write_output(
     B1 note: meta.json contains the summary only (author/code/url/fetched_at/
     counts/kept/segments). The raw Relay payload is written to `relay.json` as
     a sibling, keeping meta.json human-readable and small. When `relay_payload`
-    is None (og fallback), relay.json is omitted.
+    is None, relay.json is omitted (covered by unit tests).
     """
     date = meta["fetched_at"][:10]
     out_dir = out_root / f"{date}_{meta['author']}_{meta['code']}"
@@ -353,50 +399,154 @@ def write_output(
     return out_dir
 
 
-def fetch_page(url: str, screenshot: bool = True) -> tuple[str, bytes | None]:
-    """Load `url` via headless chromium and return (html, screenshot_bytes_or_None).
+@dataclass
+class FetchResult:
+    html: str
+    screenshot: bytes | None
+    final_url: str
+    auth_status: Literal["ok", "auth_required"]  # 收窄型別，拼字錯誤不靜默落 ok
 
-    Anonymous browsing — no cookies, no login. Mobile fingerprint — desktop
-    anonymous access is blocked since 2026-07. Waits for `networkidle` (≤30s).
+
+def _default_profile_dir() -> pathlib.Path:
+    base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+    return pathlib.Path(base) / "threads-pipeline" / "threads-profile"
+
+
+class ProfileLock:
+    """單實例鎖（design Risk）：lockfile 而非 Chromium SingletonLock（異常終止殘留）。"""
+
+    def __init__(self, profile_dir: pathlib.Path):
+        self._path = pathlib.Path(profile_dir) / ".threads_fetch.lock"
+
+    def acquire(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(self._path, "x") as fd:
+                fd.write(datetime.datetime.now(datetime.UTC).isoformat())
+        except FileExistsError as exc:
+            raise RuntimeError(
+                f"profile {self._path.parent} in use (lock {self._path}); "
+                f"確認無其他 fetcher 執行後手動刪除 lock 檔"
+            ) from exc
+
+    def release(self) -> None:
+        self._path.unlink(missing_ok=True)
+
+
+def fetch_page(
+    url: str,
+    screenshot: bool = True,
+    *,
+    profile_dir: pathlib.Path | None = None,
+    headless: bool = False,
+) -> FetchResult:
+    """Load `url` via authenticated persistent-profile chromium (design D1/D2)."""
+    from playwright.sync_api import sync_playwright
+
+    profile_dir = profile_dir or _default_profile_dir()
+    lock = ProfileLock(profile_dir)
+    lock.acquire()
+    try:
+        with sync_playwright() as p:
+            ctx = p.chromium.launch_persistent_context(
+                user_data_dir=str(pathlib.Path(profile_dir).resolve()),
+                headless=headless,
+                **authenticated_context_kwargs(),
+            )
+            try:
+                page = ctx.new_page()
+                page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                # 輪詢至 Relay payload 出現或逾時，不在首個 data-sjs 即擷取
+                html = page.content()
+                deadline = 8_000
+                waited = 0
+                while extract_relay_json(html) is None and waited < deadline:
+                    page.wait_for_timeout(500)
+                    waited += 500
+                    html = page.content()
+                final_url = page.url
+                shot = page.screenshot(full_page=False) if screenshot else None
+                auth = detect_auth_failure(final_url, html, requested_url=url) or "ok"
+                return FetchResult(html=html, screenshot=shot,
+                                   final_url=final_url, auth_status=auth)
+            finally:
+                ctx.close()
+    finally:
+        lock.release()
+
+
+def run_login(profile_dir: pathlib.Path) -> int:
+    """Headed login flow: open the persistent profile at /login and wait for
+    the user to complete auth (incl. 2FA) before closing the context.
+
+    No fetch happens here — this only seeds/refreshes the browser profile's
+    cookies so later `fetch_page` calls run authenticated (design D1/D2).
     """
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            ctx = browser.new_context(**mobile_context_kwargs())
-            page = ctx.new_page()
-            page.goto(url, wait_until="networkidle", timeout=30_000)
-            html = page.content()
-            shot = page.screenshot(full_page=False) if screenshot else None
-            return html, shot
-        finally:
-            browser.close()
-
-
-def fetch_og_fallback(url: str, timeout: float = 20.0) -> str | None:
-    """Single anonymous HTTP GET with mobile UA; returns HTML or None on error.
-
-    降級管道刻意不開 browser（design D2）：og meta 是伺服端渲染的 SEO
-    資產，純 GET 即可取得；任何網路/HTTP 錯誤一律回 None，由呼叫端
-    走既有 exit 2 路徑。
-    """
-    import urllib.error
-    import urllib.request
-
-    req = urllib.request.Request(url, headers={"User-Agent": MOBILE_UA})
+    lock = ProfileLock(profile_dir)
+    lock.acquire()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, OSError, ValueError):
-        return None
+        with sync_playwright() as p:
+            ctx = p.chromium.launch_persistent_context(
+                user_data_dir=str(pathlib.Path(profile_dir).resolve()),
+                headless=False,
+                **authenticated_context_kwargs(),
+            )
+            try:
+                ctx.new_page().goto("https://www.threads.com/login", wait_until="domcontentloaded")
+                print("在瀏覽器完成登入（含 2FA），完成後回終端按 Enter...", file=sys.stderr)
+                input()
+                return 0
+            finally:
+                ctx.close()
+    finally:
+        lock.release()
+
+
+class _ArgParser(argparse.ArgumentParser):
+    """argparse usage error → exit 1（不得沿用預設 SystemExit(2)，會撞內容失敗碼）。"""
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        print(f"ERROR: {message}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
+    """Wrapper：把「界定的 operational 例外」統一轉 exit 5，argparse usage error 轉 exit 1。
+
+    只捕捉 ProfileLock 占用(RuntimeError)、I/O(OSError)、瀏覽器引擎錯誤(PlaywrightError)。
+    TypeError/KeyError/AssertionError 等程式缺陷不得偽裝成 exit 5（否則測試假綠、真 bug 被藏）。
+    """
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+    except ImportError:
+        # playwright 缺席時的 dummy：永遠不會被 raise，僅讓 except tuple 合法。
+        # 不可用空 tuple——except (..., ()) 會在 catch 時拋 TypeError，
+        # operational 例外反而 crash 而非回 exit 5。
+        class PlaywrightError(Exception):  # type: ignore[no-redef]
+            pass
+
+    try:
+        return _run(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
+    except (RuntimeError, OSError, PlaywrightError) as exc:
+        print(f"OPERATIONAL: {exc}", file=sys.stderr)
+        return 5
+
+
+def _run(argv: list[str] | None = None) -> int:
+    ap = _ArgParser(
         description="Fetch a Threads post + classified threads/replies into drafts/library/"
     )
-    ap.add_argument("url", help="Threads post URL (https://www.threads.com/@user/post/CODE)")
+    ap.add_argument(
+        "url",
+        nargs="?",
+        help="Threads post URL (https://www.threads.com/@user/post/CODE); "
+        "omit for --login/--auth-check-only",
+    )
     ap.add_argument(
         "--include-replies",
         action="store_true",
@@ -414,7 +564,45 @@ def main(argv: list[str] | None = None) -> int:
         default=pathlib.Path("drafts/library"),
         help="Output root (default: drafts/library)",
     )
+    ap.add_argument(
+        "--profile",
+        type=pathlib.Path,
+        default=_default_profile_dir(),
+        help="Persistent browser profile dir (login session)",
+    )
+    ap.add_argument("--headless", action="store_true", help="Run headless (default headed)")
+    ap.add_argument(
+        "--debug-dump",
+        action="store_true",
+        help="On content failure, dump HTML to _debug",
+    )
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--login", action="store_true", help="Headed login to init profile; no fetch"
+    )
+    mode.add_argument(
+        "--auth-check-only",
+        action="store_true",
+        help="Verify session (0 ok / 4 need login)",
+    )
     args = ap.parse_args(argv)
+
+    if not args.login and not args.auth_check_only and not args.url:
+        print("ERROR: url required (or use --login / --auth-check-only)", file=sys.stderr)
+        return 1
+
+    if args.login:
+        return run_login(args.profile)   # operational 例外由 main wrapper 捕捉
+    if args.auth_check_only:
+        # goto 首頁：requested_url 無 code → detector 情境化訊號不啟用，
+        # 已登入首頁（og:url=首頁、無表單）正確回 ok
+        result = fetch_page(
+            "https://www.threads.com/", screenshot=False,
+            profile_dir=args.profile, headless=args.headless,
+        )
+        rc = 4 if result.auth_status == "auth_required" else 0
+        print(f"AUTH-CHECK: {'need login' if rc else 'session ok'}", file=sys.stderr)
+        return rc
 
     try:
         username, code = parse_url(args.url)
@@ -423,41 +611,34 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"Fetching {args.url} ...", file=sys.stderr)
-    html, shot = fetch_page(args.url, screenshot=not args.no_screenshot)
+    result = fetch_page(
+        args.url,
+        screenshot=not args.no_screenshot,
+        profile_dir=args.profile,
+        headless=args.headless,
+    )
+    if result.auth_status == "auth_required":
+        print("AUTH: login session invalid — re-run with --login", file=sys.stderr)
+        return 4
+    html, shot = result.html, result.screenshot
 
     relay = extract_relay_json(html)
     if relay is None:
-        # 降級鏈（design D2/D4/D7）：主管道拿不到 Relay → 試 og fallback。
-        og_html = fetch_og_fallback(args.url)
-        og = extract_og_fields(og_html) if og_html else None
-        # D7 author guard：og:title 須含 (@url_author)，否則視為 logged-out
-        # feed / 錯誤頁偽裝，不得產 partial（避免掩蓋主管道壞損信號）。
-        if og is not None and f"(@{username})" in og.get("title", ""):
-            meta = {
-                "author": username,
-                "code": code,
-                "url": args.url,
-                "fetched_at": datetime.datetime.now(datetime.UTC).isoformat(),
-                "fetch_mode": "og_fallback",
-                "og_title": og["title"],
-            }
-            md = render_partial_markdown(og, meta)
-            out_dir = write_output(args.out, meta, md, None, None)
-            print(
-                f"PARTIAL: relay unavailable, og fallback wrote {out_dir}",
-                file=sys.stderr,
-            )
-            return 3
-        # I4: Meta schema drift detection signal.（og 為 None 或未過 author
-        # guard 皆落此）
-        debug_dir = args.out / "_debug"
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
-        debug_file = debug_dir / f"{ts}_{code}_nomatch.html"
-        debug_file.write_text(html[:500_000], encoding="utf-8")
+        # 登入態下 relay 缺席 = 內容問題（死貼文/重導/schema drift），非 auth——
+        # auth 失效已由上游 result.auth_status 攔截（exit 4）。匿名 og 診斷已移除：
+        # 2026 起匿名請求對貼文頁一律回登入牆，該訊號零資訊量（2026-07-12 dogfood）。
+        if code not in result.final_url:
+            print(f"GONE: redirected away from post (final_url={result.final_url}) — "
+                  f"post likely deleted or restricted", file=sys.stderr)
+        # I4: Meta schema drift detection signal（僅 --debug-dump 時落檔）。
+        if args.debug_dump:
+            debug_dir = args.out / "_debug"
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+            debug_file = debug_dir / f"{ts}_{code}_nomatch.html"
+            debug_file.write_text(html[:500_000], encoding="utf-8")
         print(
-            f"ERROR: could not find {_RELAY_QUERY_MARKER} in page HTML. "
-            f"Dumped first 500KB to {debug_file} for inspection.",
+            f"ERROR: no {_RELAY_QUERY_MARKER} in HTML (use --debug-dump to inspect)",
             file=sys.stderr,
         )
         return 2
